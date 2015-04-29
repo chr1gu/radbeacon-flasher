@@ -41,9 +41,20 @@ require 'fileutils'
 require 'net/http'
 class FirmwareFile
   def initialize(version)
-    version.gsub! ".", "-"
-    @filename = "radbeacon-usb-#{version}.bin"
+    version = mangle_version(version)
+
+    @filename = "radbeacon-#{version}.bin"
     @filepath = File.expand_path "~/.radbeacon/firmware/#{@filename}"
+  end
+
+  def mangle_version(version)
+    # Replace dots for dashes
+    version.gsub! ".", "-"
+
+    # Append "usb-" if we start with a number
+    version = "usb-#{version}" if version =~ /^\d/
+
+    version
   end
 
   def path

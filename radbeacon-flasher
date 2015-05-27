@@ -183,17 +183,29 @@ def wait_for_beacon(port)
   puts
 end
 
-def notify_start
-  if File.exist? "/System/Library/Sounds/Purr.aiff"
-    `afplay /System/Library/Sounds/Purr.aiff`
-  end
+require 'pathname'
+START_SOUND   = Pathname("/System/Library/Sounds/Purr.aiff")
+SUCCESS_SOUND = Pathname("/System/Library/Sounds/Frog.aiff")
+FAILURE_SOUND = Pathname("/System/Library/Sounds/Sosumi.aiff")
+
+def play_sound(file)
+  `afplay #{file}`
 end
+
+def notify_start
+  play_sound START_SOUND if START_SOUND.exist?
+end
+
 def notify_success
-  if File.exist? "/System/Library/Sounds/Frog.aiff"
-    `afplay /System/Library/Sounds/Frog.aiff`
-  end
+  play_sound SUCCESS_SOUND if SUCCESS_SOUND.exist?
   puts
   puts "Success!"
+end
+
+def notify_failure
+  play_sound FAILURE_SOUND if FAILURE_SOUND.exist?
+  puts
+  puts "Failure!"
 end
 
 def run(options)
@@ -208,8 +220,13 @@ def run(options)
   if (dfu.apply)
     puts "DFU Success, flashing..."
     flasher = Flasher.new(file.path)
-    notify_success if flasher.flash
+    if flasher.flash
+      notify_success
+    else
+      notify_failure
+    end
   else
+    notify_failure
     STDERR.puts "ERROR: DFU failed!"
   end
 end

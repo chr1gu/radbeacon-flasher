@@ -219,11 +219,13 @@ trap(:INT) do
   exit 0
 end
 
-begin
+loop do
   if options.watch
     print "Please insert beacon (ctrl-c to cancel)  "
     wait_for_beacon(options.port)
   end
 
  run(options)
-end while options.watch
+
+ break unless options.watch
+end

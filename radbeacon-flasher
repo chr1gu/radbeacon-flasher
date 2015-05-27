@@ -214,6 +214,11 @@ def run(options)
   end
 end
 
+trap(:INT) do
+  puts "\n\n    kthxbye"
+  exit 0
+end
+
 begin
   if options.watch
     print "Please insert beacon (ctrl-c to cancel)  "
@@ -221,9 +226,4 @@ begin
   end
 
  run(options)
-
-rescue Interrupt
-  puts "\n\n    kthxbye"
-  exit 0
 end while options.watch
-

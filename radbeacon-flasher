@@ -174,6 +174,15 @@ end.parse!
   end
 end
 
+def wait_for_remove_beacon(port)
+  loop do
+    # TODO: Refactor so we are not duplicating this util specific code
+    break unless `dfu-util -l`.include?("Found DFU: [2458:fffe]")
+    sleep 0.1
+  end
+  puts
+end
+
 def wait_for_beacon(port)
   loop do
     break if File.exist?(port)
@@ -245,4 +254,6 @@ loop do
  run(options)
 
  break unless options.watch
+
+ wait_for_remove_beacon options.port
 end

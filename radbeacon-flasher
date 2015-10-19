@@ -206,6 +206,7 @@ def notify_start
 end
 
 def notify_success
+  system "osascript -e 'display notification \"Success\" with title \"RadBeacon Flasher\"'"
   play_sound SUCCESS_SOUND if SUCCESS_SOUND.exist?
   puts
   puts "Success!"

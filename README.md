@@ -1,8 +1,5 @@
 # radbeacon-flasher
 
-
-# radbeacon-flasher
-
 # USAGE
 
 On a mac you should not need to pass any options in to flash the default

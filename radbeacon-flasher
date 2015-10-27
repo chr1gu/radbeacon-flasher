@@ -84,9 +84,11 @@ end
 class DFUer
   V21_DFU = "aa"
   V20_DFU = "30"
+  V32_DFU = "142751fc3e204ffc8c468474f7d9e52b"
   BLUGIGA_DFU = "0001090001"
-  NICE_DFU = "0530303030"
-
+  NICE_DFU_V2 = "0530303030"
+  NICE_DFU_V3 = "05303030303030303000
+"
   attr_reader :port
   def initialize(port)
     @port = port
@@ -94,7 +96,7 @@ class DFUer
 
   def apply
     if File.exist? port
-      [V21_DFU, V20_DFU, BLUGIGA_DFU, NICE_DFU].each do |cmd|
+      [V21_DFU, V20_DFU, BLUGIGA_DFU, V32_DFU, NICE_DFU_V2, NICE_DFU_V3].each do |cmd|
         dfu_cmd(cmd, port)
         sleep 0.5
         return true if dfu_mode?

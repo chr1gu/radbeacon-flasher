@@ -43,11 +43,9 @@ require 'net/http'
 class FirmwareError < StandardError; end
 
 class FirmwareFile
+  DEFAULT_PREFIX = "radbeacon-usb-"
   SIZE=124928
 
-  def initialize(version)
-    version = mangle_version(version)
-  DEFAULT_PREFIX = "radbeacon-usb-"
   def initialize(firmware_name)
     firmware_name = mangle_name(firmware_name)
 

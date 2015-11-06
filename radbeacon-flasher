@@ -40,21 +40,25 @@ options.port = "/dev/tty.usbmodem1"
 require 'fileutils'
 require 'net/http'
 class FirmwareFile
-  def initialize(version)
-    version = mangle_version(version)
+  DEFAULT_PREFIX = "radbeacon-usb-"
+  def initialize(firmware_name)
+    firmware_name = mangle_name(firmware_name)
 
-    @filename = "radbeacon-#{version}.bin"
+    @filename = "#{firmware_name}.bin"
     @filepath = File.expand_path "~/.radbeacon/firmware/#{@filename}"
   end
 
-  def mangle_version(version)
+  def mangle_name(firmware_name)
+
+    # handle radbeacon-g shorthand,
+    # ex: `radbeacon-flasher --version g-0-2-9`
+    if firmware_name =~ /^radbeacon-usb-g-/
+      firmware_name.gsub!('usb-g-', 'g-')
+    end
     # Replace dots for dashes
-    version.gsub! ".", "-"
+    firmware_name.gsub! ".", "-"
 
-    # Append "usb-" if we start with a number
-    version = "usb-#{version}" if version =~ /^\d/
-
-    version
+    firmware_name
   end
 
   def path
@@ -87,8 +91,7 @@ class DFUer
   V32_DFU = "142751fc3e204ffc8c468474f7d9e52b"
   BLUGIGA_DFU = "0001090001"
   NICE_DFU_V2 = "0530303030"
-  NICE_DFU_V3 = "05303030303030303000
-"
+  NICE_DFU_V3 = "05303030303030303000"
   attr_reader :port
   def initialize(port)
     @port = port
@@ -166,6 +169,9 @@ OptionParser.new do |opts|
   opts.on("-VVERSION", "--version=VERSION", "Firmware Version (#{options.version})") do |ver|
     options.version = ver
   end
+  opts.on("-FFIRMWARE", "--firmware=firmware", "Firmware Name (n/a) - will override any version setting") do |fw|
+    options.firmware = fw
+  end
 end.parse!
 
 # Check for system commands needed by this script
@@ -223,7 +229,8 @@ end
 def run(options)
   puts "Using port #{options.port}"
   puts "WARNING: #{options.port} does not exist" unless File.exist? options.port
-  file = FirmwareFile.new(options.version)
+  firmware_file_name = options.firmware || "#{FirmwareFile::DEFAULT_PREFIX}#{options.version}"
+  file = FirmwareFile.new(firmware_file_name)
   puts "Using fimware #{file.path}"
   puts "Going into DFU mode..."
   dfu = DFUer.new options.port

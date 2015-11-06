@@ -39,8 +39,13 @@ options.port = "/dev/tty.usbmodem1"
 
 require 'fileutils'
 require 'net/http'
+
+class FirmwareError < StandardError; end
+
 class FirmwareFile
   DEFAULT_PREFIX = "radbeacon-usb-"
+  SIZE=124928
+
   def initialize(firmware_name)
     firmware_name = mangle_name(firmware_name)
 
@@ -63,7 +68,12 @@ class FirmwareFile
 
   def path
     fetch unless File.exist? @filepath
+    raise FirmwareError, "File size mismatch, may be corrupted" unless valid?
     @filepath
+  end
+
+  def valid?
+    File.size(@filepath) == SIZE
   end
 
   def fetch
@@ -194,6 +204,8 @@ end
 def wait_for_beacon(port)
   loop do
     break if File.exist?(port)
+    # If a dongle is stuck in DFU mode, it's ok to flash it.
+    break if `dfu-util -l`.include?("Found DFU: [2458:fffe]")
     sleep 0.1
     ProgressSpinner.tick
   end

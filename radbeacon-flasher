@@ -15,10 +15,10 @@
 #
 # PREREQUISITES
 #
-# This script requires both rbcomser and dfu-util.
+# This script requires both serhex and dfu-util.
 #
-# rbcomser can be installed from source:
-#   https://github.com/RadiusNetworks/ble112-usb-comm
+# serhex can be installed from source:
+#   https://github.com/RadiusNetworks/serhex
 #
 # dfu-util can be found in most package managers:
 #   brew install dfu-util         ; # On Mac
@@ -130,7 +130,7 @@ class DFUer
   end
 
   def dfu_cmd(cmd, port)
-    `rbcomser #{port} #{cmd} 2>&1 > /dev/null`
+    `serhex #{port} #{cmd} 2>&1 > /dev/null`
   end
 end
 
@@ -185,7 +185,7 @@ OptionParser.new do |opts|
 end.parse!
 
 # Check for system commands needed by this script
-%w{dfu-util rbcomser}.each do |cmd|
+%w{dfu-util serhex}.each do |cmd|
   unless system("which #{cmd} > /dev/null 2>&1")
     STDERR.puts "ERROR: Missing #{cmd} command"
     exit 1

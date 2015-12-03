@@ -31,7 +31,7 @@ require "uri"
 # Default Settings
 #
 options = OpenStruct.new
-options.version = "2.2.0"
+options.version = "3.2.3"
 options.watch = false
 options.port = "/dev/tty.usbmodem1"
 

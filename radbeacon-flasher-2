@@ -1,0 +1,635 @@
+#!/usr/bin/env ruby
+#
+# radbeacon-flasher
+#
+# USAGE
+#
+# On a mac you should not need to pass any options in to flash the default
+# firmware to the beacon. The firmware will be automatically downloaded. Use
+# the `-w` option to "watch" for the beacon to be plugged in and continue
+# flashing beacon.
+#
+# For full usage run with `--help` option:
+#
+#   radbeacon-flasher --help
+#
+# PREREQUISITES
+#
+# This script requires both serhex and dfu-util.
+#
+# serhex can be installed from source:
+#   https://github.com/RadiusNetworks/serhex
+#
+# dfu-util can be found in most package managers:
+#   brew install dfu-util         ; # On Mac
+#   sudo apt-get install dfu-util ; # On Ubuntu
+#
+require "ostruct"
+require "net/http"
+require "uri"
+require 'csv'
+#
+# Default Settings
+#
+options = OpenStruct.new
+options.version = "3.2.3"
+options.watch = false
+options.port = "/dev/tty.usbmodem1"
+
+################################################################################
+
+require 'fileutils'
+require 'net/http'
+
+class FirmwareError < StandardError; end
+
+class FirmwareFile
+  DEFAULT_PREFIX = "radbeacon-usb-"
+  SIZE=360492
+
+  def initialize(firmware_name)
+    @firmware_name = mangle_name(firmware_name)
+
+    @filename = "#{firmware_name}.hex"
+    @filepath = File.expand_path "~/.radbeacon/firmware/#{@filename}"
+  end
+
+  def mangle_name(firmware_name)
+
+    # handle radbeacon-g shorthand,
+    # ex: `radbeacon-flasher --version g-0-2-9`
+    if firmware_name =~ /^radbeacon-usb-g-/
+      firmware_name.gsub!('usb-g-', 'g-')
+    end
+    # Replace dots for dashes
+    firmware_name.gsub! ".", "-"
+
+    firmware_name
+  end
+  
+  def name
+    @firmware_name
+  end
+  
+  
+  def path
+    fetch unless File.exist? @filepath
+    raise FirmwareError, "File size mismatch, may be corrupted" unless valid?
+    @filepath
+  end
+
+  def valid?
+    File.size(@filepath) == SIZE
+  end
+
+  def fetch
+    puts "Downloading Firmware #{@filename}"
+    url = "https://s3.amazonaws.com/downloads.radiusnetworks.com/43D9DC92-4AB7-4C9E-ABF2-EEB3A496EBDF/#{@filename}"
+    FileUtils.mkdir_p File.dirname(@filepath)
+
+    uri = URI.parse(url)
+    Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https') do |http|
+      request = Net::HTTP::Get.new(uri.request_uri)
+
+      response = http.request request # Net::HTTPResponse object
+      if(response.code != "200")
+        puts "ERROR: Unable to fetch #{url}"
+        exit 1
+      end
+      File.write(@filepath, response.body)
+    end
+  end
+end
+
+class BinaryFile
+  SIZE=124928
+  TMPDIR="/tmp"
+
+  def initialize(firmware)
+    prestripped_name = convert2bin(firmware)
+    @filename = strip(prestripped_name)
+    @filepath = File.expand_path "#{TMPDIR}/#{@filename}"
+  end
+  
+  def convert2bin(firmware)
+    # convert firmware hex file to bin file
+    prestripped_name = firmware.name + "-prestrip.bin"
+    precmd = RUBY_PLATFORM.include?("darwin") ? "" : "sudo "
+    cmd = "#{precmd}gobjcopy -I ihex " + firmware.path + " -O binary " + TMPDIR + "/" + prestripped_name 
+    system("#{cmd} 2>/dev/null 1>/dev/null")
+    prestripped_name
+  end
+  
+  def strip(prestripped_name)
+    # convert firmware hex file to bin file
+    stripped_name = prestripped_name.split('-prestrip').first + ".bin"
+    precmd = RUBY_PLATFORM.include?("darwin") ? "" : "sudo "
+    cmd = "#{precmd}dd bs=1024 if=" + TMPDIR + "/" + prestripped_name + " of=" + TMPDIR + "/" + stripped_name + " skip=4 count=122"
+    system("#{cmd} 2>/dev/null 1>/dev/null")
+    stripped_name
+  end
+
+  
+  def name
+    @firmware_name
+  end
+  
+  
+  def path
+    fetch unless File.exist? @filepath
+    raise FirmwareError, "File size mismatch, may be corrupted" unless valid?
+    @filepath
+  end
+
+  def valid?
+    File.size(@filepath) == SIZE
+  end
+  
+end
+
+class ConfiguredFirmwareFile
+  SIZE=360492
+  TMPDIR="/tmp"
+
+  def initialize(firmwarefile, hash)
+    @filename = "#{firmware.name}-cfg.bin"
+    @filepath = File.expand_path "#{TMPDIR}/#{@filename}"
+    firmware = File.readlines(firmwarefile.path)
+    
+    # configure PIN
+    if (hash.key?("pin"))
+        encodedPin = hash["pin"].unpack('H*').first
+        puts encodedPin
+        puts encodedPin[0..15]
+        modifyFirmwareLine(firmware, 7074, 33, encodedPin[0..7])
+        modifyFirmwareLine(firmware, 7075, 21, encodedPin[8..15])
+    end
+    
+    # create temporary file firmware file
+    File.open(@filepath, 'w') { |file| file.write("#{firmware.join}") }
+  end
+  
+  
+  def configure(firmware, hash)
+      # get fresh copy of firmware
+  end
+  
+  def name
+    @firmware_name
+  end
+  
+  
+  def path
+    fetch unless File.exist? @filepath
+    raise FirmwareError, "File size mismatch, may be corrupted" unless valid?
+    @filepath
+  end
+
+  def valid?
+    File.size(@filepath) == SIZE
+  end
+  
+end
+
+class ConfigFile
+  def initialize(config_file_name)
+    @configfilepath = File.expand_path "#{config_file_name}"
+    rows = CSV.parse(File.open(config_file_name)).to_a
+    cols = rows.shift
+    @confighashed = Array.new
+    collection = rows.collect do |row|  
+        @confighashed.push(Hash[*cols.zip(row).flatten])
+    end 
+  end
+  
+  def path
+    @configfilepath
+  end
+  
+  def hashed
+    @confighashed
+  end
+end
+
+
+
+class DFUer
+  V21_DFU = "aa"
+  V20_DFU = "30"
+  V32_DFU = "142751fc3e204ffc8c468474f7d9e52b"
+  BLUGIGA_DFU = "0001090001"
+  NICE_DFU_V2 = "0530303030"
+  NICE_DFU_V3 = "05303030303030303000"
+  attr_reader :port
+  def initialize(port)
+    @port = port
+  end
+
+  def apply
+    if File.exist? port
+      [V21_DFU, V20_DFU, BLUGIGA_DFU, V32_DFU, NICE_DFU_V2, NICE_DFU_V3].each do |cmd|
+        dfu_cmd(cmd, port)
+        sleep 0.5
+        return true if dfu_mode?
+      end
+    end
+
+    return true if dfu_mode?
+
+    sleep 2 # WTF
+
+    dfu_mode?
+  end
+
+  private
+
+  def dfu_mode?
+    `dfu-util -l`.include? "Found DFU: [2458:fffe]"
+  end
+
+  def dfu_cmd(cmd, port)
+    `serhex #{port} #{cmd} 2>&1 > /dev/null`
+  end
+end
+
+class Flasher
+  attr_reader :dir, :name
+  def initialize(path)
+    @dir = File.dirname(path)
+    @name = File.basename(path)
+  end
+
+  def flash
+    # looks like dfu-util has to execute in the same directory as the firmware image
+    # try without sudo first, if that fails use sudo.
+    Dir.chdir(dir) do |path|
+      precmd = RUBY_PLATFORM.include?("darwin") ? "" : "sudo "
+      cmd = "#{precmd}dfu-util -d 2458:fffe -D #{name}"
+
+      # using system so we get the output of dfu-util
+      print "\033[34m"
+      system(cmd)
+      print "\033[0m"
+    end
+    $?.success?
+  end
+end
+
+class ProgressSpinner
+  def self.tick
+    @chars ||= %w{| / - \\}
+    print "\b#{(@chars.rotate!).last}"
+  end
+end
+
+################################################################################
+
+require 'optparse'
+OptionParser.new do |opts|
+  opts.banner = "Usage: #{File.basename $0} [options]"
+  opts.on("-w", "--watch", "Run forever and watch for new beacons") do
+    options.watch = true
+  end
+  opts.on("-cCSVFILE", "--configure=csvfile", "Configuration CSF File (#{options.csvfile})") do |csvfile|
+    options.csvfile = csvfile
+  end
+  opts.on("-pPORT", "--port=port", "Logical Port (#{options.port})") do |port|
+    options.port = port
+  end
+  opts.on("-VVERSION", "--version=VERSION", "Firmware Version (#{options.version})") do |ver|
+    options.version = ver
+  end
+  opts.on("-FFIRMWARE", "--firmware=firmware", "Firmware Name (n/a) - will override any version setting") do |fw|
+    options.firmware = fw
+  end
+end.parse!
+
+# Check for system commands needed by this script
+%w{dfu-util serhex}.each do |cmd|
+  unless system("which #{cmd} > /dev/null 2>&1")
+    STDERR.puts "ERROR: Missing #{cmd} command"
+    exit 1
+  end
+end
+
+def move_cursor_back_one
+  print "\f"
+end
+
+def wait_for_remove_beacon(port)
+  loop do
+    # TODO: Refactor so we are not duplicating this util specific code
+    break unless `dfu-util -l`.include?("Found DFU: [2458:fffe]")
+    sleep 0.1
+    ProgressSpinner.tick
+  end
+end
+
+def wait_for_beacon(port)
+  loop do
+    break if File.exist?(port)
+    # If a dongle is stuck in DFU mode, it's ok to flash it.
+    break if `dfu-util -l`.include?("Found DFU: [2458:fffe]")
+    sleep 0.1
+    ProgressSpinner.tick
+  end
+end
+
+def wait_for_remove_configured_beacon(port)
+  loop do
+    break unless File.exist?(port)
+    sleep 0.1
+    ProgressSpinner.tick
+  end
+end
+
+require 'pathname'
+NEXT_SOUND    = Pathname("/System/Library/Sounds/Submarine.aiff")
+START_SOUND   = Pathname("/System/Library/Sounds/Purr.aiff")
+SUCCESS_SOUND = Pathname("/System/Library/Sounds/Frog.aiff")
+FAILURE_SOUND = Pathname("/System/Library/Sounds/Sosumi.aiff")
+FINISH_SOUND  = Pathname("/System/Library/Sounds/Glass.aiff")
+
+def play_sound(file)
+  `afplay #{file}`
+end
+
+def notify_start
+  play_sound START_SOUND if START_SOUND.exist?
+end
+
+def notify_success
+  system "osascript -e 'display notification \"Success\" with title \"RadBeacon Flasher\"'"
+  play_sound SUCCESS_SOUND if SUCCESS_SOUND.exist?
+  puts
+  puts "Success!"
+  puts
+end
+
+def notify_failure
+  play_sound FAILURE_SOUND if FAILURE_SOUND.exist?
+  puts
+  puts "Failure!"
+end
+
+
+def notifyConfigDetails(hash)
+    puts
+    puts
+    puts("===================================================================")
+    if (hash.key?("pin"))
+        puts("                    PIN:" + hash["pin"].upcase)
+    end
+    if (hash.key?("name"))
+        puts("                   Name:" + hash["name"])
+    end
+    if ((hash.key?("interval")) and (hash.key?("txpower")) and (hash.key?("modes")))
+        puts("           Beacon Modes:" + hash["modes"].upcase)
+        puts("               Interval:" + hash["interval"].upcase)
+        puts("               TX Power:" + hash["txpower"].upcase)
+    end
+    if (hash.key?("ibeacon"))
+        puts(" iBeacon/AltBeacon Data:" + hash["ibeacon"].upcase)
+    end
+    if (hash.key?("eddystoneuid"))
+        puts("     Eddystone UID Data:" + hash["eddystoneuid"].upcase)
+    end
+#    if (hash.key?("eddystoneurl"))
+#        puts("     Eddystone URL Data:" + hash["eddystoneurl"].upcase)
+#    end
+    puts("===================================================================")
+end
+
+def GenerateAndAppendCRC ( lineData)
+    lineHex = [lineData].first.chars.each_slice(2).map(&:join)
+    crcVal = 0
+    lineHex.each do|c|
+        crcVal = crcVal + c.to_i(16) 
+    end
+    crcVal = 0 - (crcVal & 0xFF)
+    crcStr = '%02X' % ( crcVal & 0xFF )
+    ":" + lineData + crcStr.downcase + "\n"
+end
+
+def modifyFirmwareLine(firmware, line, start, string)
+    lineData = firmware[line]
+    linePrefix = lineData[1..start-1]
+    linePostfix = lineData[start + string.length..40]
+    firmware[line] = GenerateAndAppendCRC( linePrefix + string + linePostfix )
+    puts("line " + line.to_s)
+    puts("lineData " + lineData)
+    puts("linePrefix " + linePrefix)
+    puts("linePostfix " + linePostfix)
+    puts(firmware[line])
+end
+
+def print_label(label)
+  `lpr -P Brother_QL_700 -o landscape -o PageSize=Custom.1x3.5in -o cpi=10 -o lpi=6 -# 2 <<< "#{label}"`
+end
+
+def flash(binary, port)
+  puts
+  puts
+  puts "WARNING: #{port} does not exist" unless File.exist? port
+  puts "Using firmware #{binary.path}"
+  puts "Going into DFU mode..."
+  dfu = DFUer.new port
+  notify_start
+
+  if (dfu.apply)
+    puts
+    puts "DFU Success, flashing...\n\n"
+    flasher = Flasher.new(binary.path)
+    if flasher.flash
+      puts
+    else
+      notify_failure
+    end
+  else
+    notify_failure
+    puts
+    STDERR.puts "ERROR: DFU failed!"
+  end
+end
+
+def configure(hash, port)
+  puts "WARNING: #{port} does not exist" unless File.exist? port
+  print("Configuring[")
+  
+  precmd = RUBY_PLATFORM.include?("darwin") ? "" : "sudo "
+  
+    # configure name
+    if (hash.key?("name"))
+        name = hash["name"]
+        cmd = "#{precmd}rbcom -P00000000 name #{name}"
+        #puts cmd
+        system("#{cmd} 2>/dev/null 1>/dev/null")
+        print "#"
+    end
+    
+    # configure ibeacon frame
+    if (hash.key?("ibeacon"))
+        prefix = "0201061aff4c000215"
+        postfix = "00"
+        frame = prefix + hash["ibeacon"] + postfix
+        cmd = "#{precmd}rbcom -P00000000 frame0 #{frame}"
+        #puts cmd
+        system("#{cmd} 2>/dev/null 1>/dev/null")
+        print "#"
+    end
+    
+     # configure altbeacon frame
+    if (hash.key?("ibeacon"))
+        prefix = "0201061bff1801beac"
+        postfix = "00"
+        frame = prefix + hash["ibeacon"] + postfix
+        cmd = "#{precmd}rbcom -P00000000 frame1 #{frame}"
+        #puts cmd
+        system("#{cmd} 2>/dev/null 1>/dev/null")
+        print "#"
+    end
+    
+    # configure eddystone uid frame
+    if (hash.key?("eddystoneuid"))
+        prefix = "0201060303aafe1716aafe00"
+        postfix = "0000"
+        frame = prefix + hash["eddystoneuid"] + postfix
+        cmd = "#{precmd}rbcom -P00000000 frame2 #{frame}"
+        #puts cmd
+        system("#{cmd} 2>/dev/null 1>/dev/null")
+        print "#"
+    end
+    
+    # configure eddystone url frame
+    if (hash.key?("eddystoneurl"))
+        urldata = hash["eddystoneurl"]
+        padding = "00000000000000000000000000000000000000"
+        prefix = "0201060303aafe1516aafe10"
+        postfix = padding[0,padding.length - urldata.length]
+        frame = prefix + urldata
+        cmd = "#{precmd}rbcom -P00000000 frame3 #{frame}"
+        #puts cmd
+        system("#{cmd} 2>/dev/null 1>/dev/null")
+        print "#"
+    end
+    
+    # configure modes
+    if (hash.key?("modes"))
+        modes = hash["modes"]
+        cmd = "#{precmd}rbcom -P00000000 bctype #{modes}"
+        #puts cmd
+        system("#{cmd} 2>/dev/null 1>/dev/null")
+        print "#"
+    end
+    
+    # configure interval
+    if (hash.key?("interval"))
+        interval = hash["interval"].to_i
+        rate = ((10000 / interval) / 0.1)*0.1
+        cmd = "#{precmd}rbcom -P00000000 advrate #{rate}"
+        #puts cmd
+        system("#{cmd} 2>/dev/null 1>/dev/null")
+        print "#"
+    end
+    
+    # configure txpower
+    if (hash.key?("txpower"))
+        txpower = hash["txpower"].to_i
+        cmd = "#{precmd}rbcom -P00000000 txpwr #{txpower}"
+        #puts cmd
+        system("#{cmd} 2>/dev/null 1>/dev/null")
+        print "#"
+    end
+    
+    # configure pin
+    if (hash.key?("pin"))
+        pin = hash["pin"]
+        cmd = "#{precmd}rbcom -P00000000 pin #{pin}"
+        #puts cmd
+#        system("#{cmd} 2>/dev/null 1>/dev/null")
+        print "#]"
+    end
+    
+    line1 = "OUTLET:" + hash["name"] + "   SN:" + hash["serial"]
+    line2 = hash["outlet_name"]
+    line3 = hash["address_2"]
+    line4 = hash["address_1"]
+    line5 = hash["city"] + ", " + hash["state"] + " " + hash["zip"]
+    
+    label = "#{line1}\n#{line2}\n#{line3}\n#{line4}\n#{line5}"
+    
+    puts 
+    puts
+    puts "Printing Label"
+    puts label
+    
+    #print_label(label)
+    
+end
+
+
+trap(:INT) do
+  puts "\n\n    kthxbye"
+  exit 0
+end
+
+
+# main
+
+firmware_file_name = options.firmware || "#{FirmwareFile::DEFAULT_PREFIX}#{options.version}"
+firmwarefile = FirmwareFile.new(firmware_file_name)
+    
+if options.csvfile
+
+  configfile = ConfigFile.new(options.csvfile)
+  configfile.hashed.each_index do |i|
+    system("clear")
+    puts
+    print "Please insert beacon to flash (ctrl-c to cancel)  "
+    play_sound NEXT_SOUND if NEXT_SOUND.exist?
+    wait_for_beacon(options.port)
+    
+    binary = BinaryFile.new(firmwarefile)
+    flash(binary, options.port)
+    play_sound NEXT_SOUND if NEXT_SOUND.exist?
+    
+    print "Please REMOVE AND REINSERT BEACON to configure (ctrl-c to cancel)  "
+    wait_for_remove_beacon(options.port)
+    wait_for_beacon(options.port)
+    
+    hash = configfile.hashed[i]
+    notifyConfigDetails(hash)
+    play_sound START_SOUND if START_SOUND.exist?
+ 
+    configure(hash, options.port)
+    play_sound FINISH_SOUND if FINISH_SOUND.exist?
+    
+    puts
+    print "SUCCESS! Please remove configured beacon (ctrl-c to cancel)  "
+    wait_for_remove_configured_beacon(options.port)
+
+    
+    puts
+    puts
+    puts "Press ENTER to continue to next beacon  (ctrl-c to cancel)  "
+    input = gets
+  end
+  play_sound NEXT_SOUND if NEXT_SOUND.exist?
+else if options.watch
+  loop do
+    puts
+    print "Please insert beacon (ctrl-c to cancel)  "
+    play_sound NEXT_SOUND if NEXT_SOUND.exist?
+    wait_for_beacon(options.port)
+    binary = BinaryFile.new(firmwarefile)
+    run(binary, options.port)
+    print "Please remove beacon (ctrl-c to cancel)  "
+    wait_for_remove_beacon options.port
+  end
+  play_sound NEXT_SOUND if NEXT_SOUND.exist?
+else
+  binary = BinaryFile.new(firmwarefile)
+  run(binary, options.port)
+end
+
+end

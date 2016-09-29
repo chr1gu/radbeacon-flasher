@@ -151,7 +151,9 @@ end
 class ConfigFile
   def initialize(config_file_name)
     @configfilepath = File.expand_path "#{config_file_name}"
-    rows = CSV.parse(File.open(config_file_name)).to_a
+    csv_text = File.read(config_file_name)
+    puts csv_text.squeeze("\r\n").gsub(/(\r\n)+/, "\r\n")
+    rows = CSV.parse(csv_text.squeeze("\r\n").gsub(/(\r\n)+/, "\r\n")).to_a
     cols = rows.shift
     @confighashed = Array.new
     collection = rows.collect do |row|  
@@ -399,13 +401,14 @@ def flash(binary, port)
     flasher = Flasher.new(binary.path)
     if flasher.flash
       puts
+      return true
     else
       notify_failure
+      return false
     end
   else
     notify_failure
-    puts
-    STDERR.puts "ERROR: DFU failed!"
+    return false
   end
 end
 
@@ -540,14 +543,21 @@ if options.csvfile
 
   configfile = ConfigFile.new(options.csvfile)
   configfile.hashed.each_index do |i|
-    system("clear")
-    puts
-    print "Please insert beacon to flash (ctrl-c to cancel)  "
-    play_sound NEXT_SOUND if NEXT_SOUND.exist?
-    wait_for_beacon(options.port)
-    
-    binary = BinaryFile.new(firmwarefile)
-    flash(binary, options.port)
+    loop do
+      system("clear")
+      puts
+      print "Please insert beacon to flash (ctrl-c to cancel)  "
+      play_sound NEXT_SOUND if NEXT_SOUND.exist?
+      wait_for_beacon(options.port)
+      
+      binary = BinaryFile.new(firmwarefile)
+      break if (flash(binary, options.port))
+      
+      puts
+      puts "Press ENTER to restart (ctrl-c to cancel)  "
+      input = gets
+    end
+      
     play_sound NEXT_SOUND if NEXT_SOUND.exist?
     
     print "Please REMOVE AND REINSERT BEACON to configure (ctrl-c to cancel)  "
@@ -585,8 +595,15 @@ else if options.watch
   end
   play_sound NEXT_SOUND if NEXT_SOUND.exist?
 else
+  puts
+  print "Please insert beacon (ctrl-c to cancel)  "
+  play_sound NEXT_SOUND if NEXT_SOUND.exist?
+  wait_for_beacon(options.port)
   binary = BinaryFile.new(firmwarefile)
-  run(binary, options.port)
+  flash(binary, options.port)
+  print "Please remove beacon (ctrl-c to cancel)  "
+  wait_for_remove_beacon options.port
+  puts
 end
 
 end

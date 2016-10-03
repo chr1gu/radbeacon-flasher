@@ -522,7 +522,7 @@ def configure(hash, port)
     # configure pin
     if (hash.key?("pin"))
         pin = hash["pin"]
-        cmd = "#{precmd}rbcom -P00000000 pin #{pin}"
+        cmd = "#{precmd}rbcom -P00000000 chgpin #{pin}"
         #puts cmd
         system("#{cmd} 2>/dev/null 1>/dev/null")
         print "#]"

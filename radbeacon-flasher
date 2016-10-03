@@ -510,21 +510,6 @@ def configure(hash, port)
         print "#]"
     end
     
-    line1 = "ROUTE:" + hash["route"] + "  OUTLET:" + hash["outlet"] + "  SN:" + hash["serial"]
-    line2 = hash["outlet_name"]
-    line3 = hash["address_2"]
-    line4 = hash["address_1"]
-    line5 = hash["city"] + ", " + hash["state"] + " " + hash["zip"]
-    
-    label = "\n#{line1}\n#{line2}\n#{line3}\n#{line4}\n#{line5}"
-    
-    puts 
-    puts
-    puts "Printing Label"
-    puts label
-    
-    print_label(label)
-    
 end
 
 

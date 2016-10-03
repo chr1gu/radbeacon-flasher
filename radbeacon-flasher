@@ -111,6 +111,24 @@ class BinaryFile
     @filepath = File.expand_path "#{TMPDIR}/#{@filename}"
   end
   
+  def fetch
+    puts "Downloading Firmware #{@filename}"
+    url = "https://s3.amazonaws.com/downloads.radiusnetworks.com/43D9DC92-4AB7-4C9E-ABF2-EEB3A496EBDF/#{@filename}"
+    FileUtils.mkdir_p File.dirname(@filepath)
+
+    uri = URI.parse(url)
+    Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https') do |http|
+      request = Net::HTTP::Get.new(uri.request_uri)
+
+      response = http.request request # Net::HTTPResponse object
+      if(response.code != "200")
+        puts "ERROR: Unable to fetch #{url}"
+        exit 1
+      end
+      File.write(@filepath, response.body)
+    end
+  end
+  
   def convert2bin(firmware)
     # convert firmware hex file to bin file
     prestripped_name = firmware.name + "-prestrip.bin"
@@ -160,23 +178,6 @@ class ConfigFile
         @confighashed.push(Hash[*cols.zip(row).flatten])
     end 
   end
-  
-    def fetch
-    puts "Downloading Firmware #{@filename}"
-    url = "https://s3.amazonaws.com/downloads.radiusnetworks.com/43D9DC92-4AB7-4C9E-ABF2-EEB3A496EBDF/#{@filename}"
-    FileUtils.mkdir_p File.dirname(@filepath)
-
-    uri = URI.parse(url)
-    Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https') do |http|
-      request = Net::HTTP::Get.new(uri.request_uri)
-
-      response = http.request request # Net::HTTPResponse object
-      if(response.code != "200")
-        puts "ERROR: Unable to fetch #{url}"
-        exit 1
-      end
-      File.write(@filepath, response.body)
-    end
   
   def path
     @configfilepath

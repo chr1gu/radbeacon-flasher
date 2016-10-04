@@ -355,25 +355,25 @@ def notifyConfigDetails(hash)
     puts
     puts("===================================================================")
     if (hash.key?("pin"))
-        puts("                    PIN:" + hash["pin"].upcase)
+        puts("                    PIN: " + hash["pin"].upcase)
     end
     if (hash.key?("name"))
-        puts("                   Name:" + hash["name"])
+        puts("                   Name: " + hash["name"])
     end
     if ((hash.key?("interval")) and (hash.key?("txpower")) and (hash.key?("modes")))
-        puts("           Beacon Modes:" + hash["modes"].upcase)
-        puts("               Interval:" + hash["interval"].upcase)
-        puts("               TX Power:" + hash["txpower"].upcase)
+        puts("           Beacon Modes: " + hash["modes"].upcase)
+        puts("               Interval: " + hash["interval"].upcase)
+        puts("               TX Power: " + hash["txpower"].upcase)
     end
     if (hash.key?("ibeacon"))
-        puts(" iBeacon/AltBeacon Data:" + hash["ibeacon"].upcase)
+        puts(" iBeacon/AltBeacon Data: " + hash["ibeacon"].upcase)
     end
     if (hash.key?("eddystoneuid"))
-        puts("     Eddystone UID Data:" + hash["eddystoneuid"].upcase)
+        puts("     Eddystone UID Data: " + hash["eddystoneuid"].upcase)
     end
-#    if (hash.key?("eddystoneurl"))
-#        puts("     Eddystone URL Data:" + hash["eddystoneurl"].upcase)
-#    end
+    if (hash.key?("eddystoneurl"))
+        puts("     Eddystone URL Data: " + hash["eddystoneurl"].upcase)
+    end
     puts("===================================================================")
 end
 
@@ -406,54 +406,53 @@ end
 
 def configure(hash, port)
   puts "WARNING: #{port} does not exist" unless File.exist? port
-  print("Configuring[")
   
+  cmdstatus = true
   precmd = RUBY_PLATFORM.include?("darwin") ? "" : "sudo "
   
     # configure name
-    if (hash.key?("name"))
+    if (cmdstatus and hash.key?("name"))
         name = hash["name"]
         cmd = "#{precmd}rbcom -P00000000 name #{name}"
         #puts cmd
-        system("#{cmd} 2>/dev/null 1>/dev/null")
-        print "#"
+        print("         Configure Name: ")
+        cmdstatus = system("#{cmd}")
     end
     
     # configure ibeacon frame
-    if (hash.key?("ibeacon"))
+    if (cmdstatus and hash.key?("ibeacon"))
         prefix = "0201061aff4c000215"
         postfix = "00"
         frame = prefix + hash["ibeacon"] + postfix
         cmd = "#{precmd}rbcom -P00000000 frame0 #{frame}"
-        #puts cmd
-        system("#{cmd} 2>/dev/null 1>/dev/null")
-        print "#"
+        print("      Configure iBeacon: ")
+        cmdstatus = system("#{cmd}")
     end
     
      # configure altbeacon frame
-    if (hash.key?("ibeacon"))
+    if (cmdstatus and hash.key?("ibeacon"))
         prefix = "0201061bff1801beac"
         postfix = "00"
         frame = prefix + hash["ibeacon"] + postfix
         cmd = "#{precmd}rbcom -P00000000 frame1 #{frame}"
         #puts cmd
-        system("#{cmd} 2>/dev/null 1>/dev/null")
-        print "#"
+        print("    Configure AltBeacon: ")
+        cmdstatus = system("#{cmd}")
     end
     
     # configure eddystone uid frame
-    if (hash.key?("eddystoneuid"))
+    if (cmdstatus and hash.key?("eddystoneuid"))
         prefix = "0201060303aafe1716aafe00"
         postfix = "0000"
         frame = prefix + hash["eddystoneuid"] + postfix
         cmd = "#{precmd}rbcom -P00000000 frame2 #{frame}"
         #puts cmd
-        system("#{cmd} 2>/dev/null 1>/dev/null")
-        print "#"
+        print("Configure Eddystone UID: ")
+        cmdstatus = system("#{cmd}")
     end
     
     # configure eddystone url frame
-    if (hash.key?("eddystoneurl"))
+    if (cmdstatus and hash.key?("eddystoneurl"))
         urldata = hash["eddystoneurl"]
         pdulength = '%02X' % ( urldata.length/2 + 4 )
         padding = "00000000000000000000000000000000000000"
@@ -461,49 +460,49 @@ def configure(hash, port)
         postfix = padding[0,padding.length - urldata.length]
         frame = prefix + urldata + postfix
         cmd = "#{precmd}rbcom -P00000000 frame3 #{frame}"
-        puts ("pdulength #{pdulength}")
-        puts cmd
         #system("#{cmd} 2>/dev/null 1>/dev/null")
-        system("#{cmd}")
-        print "#"
+        print("Configure Eddystone URL: ")
+        cmdstatus = system("#{cmd}")
     end
     
     # configure modes
-    if (hash.key?("modes"))
+    if (cmdstatus and hash.key?("modes"))
         modes = hash["modes"]
         cmd = "#{precmd}rbcom -P00000000 bctype #{modes}"
         #puts cmd
-        system("#{cmd} 2>/dev/null 1>/dev/null")
-        print "#"
+        print("        Configure Modes: ")
+        cmdstatus = system("#{cmd}")
     end
     
     # configure interval
-    if (hash.key?("interval"))
+    if (cmdstatus and hash.key?("interval"))
         interval = hash["interval"].to_i
         rate = ((10000 / interval) / 0.1)*0.1
         cmd = "#{precmd}rbcom -P00000000 advrate #{rate}"
         #puts cmd
-        system("#{cmd} 2>/dev/null 1>/dev/null")
-        print "#"
+        print("    Configure Intervals: ")
+        cmdstatus = system("#{cmd}")
     end
     
     # configure txpower
-    if (hash.key?("txpower"))
+    if (cmdstatus and hash.key?("txpower"))
         txpower = hash["txpower"].to_i
         cmd = "#{precmd}rbcom -P00000000 txpwr #{txpower}"
         #puts cmd
-        system("#{cmd} 2>/dev/null 1>/dev/null")
-        print "#"
+        print("     Configure TX Power: ")
+        cmdstatus = system("#{cmd}")
     end
     
     # configure pin
-    if (hash.key?("pin"))
+    if (cmdstatus and hash.key?("pin"))
         pin = hash["pin"]
         cmd = "#{precmd}rbcom -P00000000 chgpin #{pin}"
         #puts cmd
-        system("#{cmd} 2>/dev/null 1>/dev/null")
-        print "#]"
+        print("          Configure PIN: ")
+        cmdstatus = system("#{cmd}")
     end
+    
+    return cmdstatus
     
 end
 
@@ -548,18 +547,26 @@ if options.csvfile
     notifyConfigDetails(hash)
     play_sound START_SOUND if START_SOUND.exist?
  
-    configure(hash, options.port)
-    play_sound FINISH_SOUND if FINISH_SOUND.exist?
-    
-    puts
-    print "SUCCESS! Please remove configured beacon (ctrl-c to cancel)  "
-    wait_for_remove_configured_beacon(options.port)
-
-    
-    puts
-    puts
-    puts "Press ENTER to continue to next beacon  (ctrl-c to cancel)  "
-    input = gets
+    status = configure(hash, options.port)
+    if (status)
+      play_sound FINISH_SOUND if FINISH_SOUND.exist?
+      puts
+      print "SUCCESS! Please remove configured beacon (ctrl-c to cancel)  "
+      wait_for_remove_configured_beacon(options.port)
+      puts
+      puts
+      puts "Press ENTER to continue to next beacon  (ctrl-c to cancel)  "
+      input = gets
+    else
+      play_sound FINISH_SOUND if FINISH_SOUND.exist?
+      puts
+      print "FAILED! Please remove beacon and check CSV for invalid values "
+      wait_for_remove_configured_beacon(options.port)
+      
+      puts
+      puts
+      exit
+    end
   end
   play_sound NEXT_SOUND if NEXT_SOUND.exist?
 else if options.watch

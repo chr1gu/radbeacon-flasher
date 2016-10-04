@@ -377,32 +377,6 @@ def notifyConfigDetails(hash)
     puts("===================================================================")
 end
 
-def GenerateAndAppendCRC ( lineData)
-    lineHex = [lineData].first.chars.each_slice(2).map(&:join)
-    crcVal = 0
-    lineHex.each do|c|
-        crcVal = crcVal + c.to_i(16) 
-    end
-    crcVal = 0 - (crcVal & 0xFF)
-    crcStr = '%02X' % ( crcVal & 0xFF )
-    ":" + lineData + crcStr.downcase + "\n"
-end
-
-def modifyFirmwareLine(firmware, line, start, string)
-    lineData = firmware[line]
-    linePrefix = lineData[1..start-1]
-    linePostfix = lineData[start + string.length..40]
-    firmware[line] = GenerateAndAppendCRC( linePrefix + string + linePostfix )
-    puts("line " + line.to_s)
-    puts("lineData " + lineData)
-    puts("linePrefix " + linePrefix)
-    puts("linePostfix " + linePostfix)
-    puts(firmware[line])
-end
-
-def print_label(label)
-  `lpr -P Brother_QL_700 -o landscape -o PageSize=Custom.1x3.5in -o cpi=12 -o lpi=7 -# 1 <<< "#{label}"`
-end
 
 def flash(binary, port)
   puts

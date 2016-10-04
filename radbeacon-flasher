@@ -481,13 +481,16 @@ def configure(hash, port)
     # configure eddystone url frame
     if (hash.key?("eddystoneurl"))
         urldata = hash["eddystoneurl"]
+        pdulength = '%02X' % ( urldata.length/2 + 4 )
         padding = "00000000000000000000000000000000000000"
-        prefix = "0201060303aafe1516aafe10"
+        prefix = "0201060303aafe#{pdulength}16aafe10"
         postfix = padding[0,padding.length - urldata.length]
-        frame = prefix + urldata
+        frame = prefix + urldata + postfix
         cmd = "#{precmd}rbcom -P00000000 frame3 #{frame}"
-        #puts cmd
-        system("#{cmd} 2>/dev/null 1>/dev/null")
+        puts ("pdulength #{pdulength}")
+        puts cmd
+        #system("#{cmd} 2>/dev/null 1>/dev/null")
+        system("#{cmd}")
         print "#"
     end
     

@@ -354,16 +354,11 @@ def notifyConfigDetails(hash)
     puts
     puts
     puts("===================================================================")
-    if (hash.key?("pin"))
-        puts("                    PIN: " + hash["pin"].upcase)
-    end
     if (hash.key?("name"))
         puts("                   Name: " + hash["name"])
     end
-    if ((hash.key?("interval")) and (hash.key?("txpower")) and (hash.key?("modes")))
+    if (hash.key?("modes"))
         puts("           Beacon Modes: " + hash["modes"].upcase)
-        puts("               Interval: " + hash["interval"].upcase)
-        puts("               TX Power: " + hash["txpower"].upcase)
     end
     if (hash.key?("ibeacon"))
         puts(" iBeacon/AltBeacon Data: " + hash["ibeacon"].upcase)
@@ -373,6 +368,15 @@ def notifyConfigDetails(hash)
     end
     if (hash.key?("eddystoneurl"))
         puts("     Eddystone URL Data: " + hash["eddystoneurl"].upcase)
+    end
+    if (hash.key?("rate"))
+        puts("                   Rate: " + hash["rate"].upcase)
+    end
+    if (hash.key?("txpower"))
+        puts("               TX Power: " + hash["txpower"].upcase)
+    end
+    if (hash.key?("pin"))
+        puts("                    PIN: " + hash["pin"].upcase)
     end
     puts("===================================================================")
 end
@@ -413,9 +417,18 @@ def configure(hash, port)
     # configure name
     if (cmdstatus and hash.key?("name"))
         name = hash["name"]
-        cmd = "#{precmd}rbcom -P00000000 name #{name}"
+        cmd = "#{precmd}rbcom -P00000000 name '#{name}'"
         #puts cmd
         print("         Configure Name: ")
+        cmdstatus = system("#{cmd}")
+    end
+    
+    # configure modes
+    if (cmdstatus and hash.key?("modes"))
+        modes = hash["modes"]
+        cmd = "#{precmd}rbcom -P00000000 bctype #{modes}"
+        #puts cmd
+        print("        Configure Modes: ")
         cmdstatus = system("#{cmd}")
     end
     
@@ -465,22 +478,12 @@ def configure(hash, port)
         cmdstatus = system("#{cmd}")
     end
     
-    # configure modes
-    if (cmdstatus and hash.key?("modes"))
-        modes = hash["modes"]
-        cmd = "#{precmd}rbcom -P00000000 bctype #{modes}"
-        #puts cmd
-        print("        Configure Modes: ")
-        cmdstatus = system("#{cmd}")
-    end
-    
-    # configure interval
-    if (cmdstatus and hash.key?("interval"))
-        interval = hash["interval"].to_i
-        rate = ((10000 / interval) / 0.1)*0.1
+    # configure rate
+    if (cmdstatus and hash.key?("rate"))
+        rate = hash["rate"].to_i * 10
         cmd = "#{precmd}rbcom -P00000000 advrate #{rate}"
         #puts cmd
-        print("    Configure Intervals: ")
+        print("         Configure Rate: ")
         cmdstatus = system("#{cmd}")
     end
     

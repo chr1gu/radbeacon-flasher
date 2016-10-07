@@ -170,7 +170,7 @@ class ConfigFile
   def initialize(config_file_name)
     @configfilepath = File.expand_path "#{config_file_name}"
     csv_text = File.read(config_file_name)
-    puts csv_text.squeeze("\r\n").gsub(/(\r\n)+/, "\r\n")
+#    puts csv_text.squeeze("\r\n").gsub(/(\r\n)+/, "\r\n")
     rows = CSV.parse(csv_text.squeeze("\r\n").gsub(/(\r\n)+/, "\r\n")).to_a
     cols = rows.shift
     @confighashed = Array.new
@@ -357,17 +357,26 @@ def notifyConfigDetails(hash)
     if (hash.key?("name"))
         puts("                   Name: " + hash["name"])
     end
-    if (hash.key?("modes"))
-        puts("           Beacon Modes: " + hash["modes"].upcase)
+    if (hash.key?("ib-enable"))
+        puts("         iBeacon Enable: " + hash["ib-enable"])
     end
-    if (hash.key?("ibeacon"))
-        puts(" iBeacon/AltBeacon Data: " + hash["ibeacon"].upcase)
+    if (hash.key?("ab-enable"))
+        puts("       altBeacon Enable: " + hash["ab-enable"])
     end
-    if (hash.key?("eddystoneuid"))
-        puts("     Eddystone UID Data: " + hash["eddystoneuid"].upcase)
+    if (hash.key?("euid-enable"))
+        puts("   Eddystone UID Enable: " + hash["euid-enable"])
     end
-    if (hash.key?("eddystoneurl"))
-        puts("     Eddystone URL Data: " + hash["eddystoneurl"].upcase)
+    if (hash.key?("eurl-enable"))
+        puts("   Eddystone URL Enable: " + hash["eurl-enable"])
+    end
+    if (hash.key?("ia-uuid") and hash.key?("ia-major") and hash.key?("ia-minor") and hash.key?("ia-power"))
+        puts(" iBeacon/AltBeacon Data: " + hash["ia-uuid"].upcase + " " + hash["ia-major"] + " " + hash["ia-minor"] + " " + hash["ia-power"])
+    end
+    if (hash.key?("euid-namespace") and hash.key?("euid-instance") and hash.key?("euid-power"))
+        puts("     Eddystone UID Data: " + hash["euid-namespace"].upcase + " " + hash["euid-instance"] + " " + hash["euid-power"])
+    end
+    if (hash.key?("eurl-url") and hash.key?("eurl-power"))
+        puts("     Eddystone URL Data: " + hash["eurl-url"] + " " + hash["eurl-power"])
     end
     if (hash.key?("rate"))
         puts("                   Rate: " + hash["rate"].upcase)
@@ -418,18 +427,18 @@ def configure(hash, port)
     if (cmdstatus and hash.key?("name"))
         name = hash["name"]
         cmd = "#{precmd}rbcom -P00000000 name '#{name}'"
-        #puts cmd
+        puts cmd
         print("         Configure Name: ")
         cmdstatus = system("#{cmd}")
     end
     
     # configure modes
-    if (cmdstatus and hash.key?("modes"))
-        modes = hash["modes"]
+    if (cmdstatus and hash.key?("ib-enable") and hash.key?("ab-enable") and hash.key?("eud-enable") and hash.key?("eurl-enable"))
+        modes = hash["ib-enable"] + hash["ab-enable"] + hash["euid-enable"] + hash["eurl-enable"]
         cmd = "#{precmd}rbcom -P00000000 bctype #{modes}"
-        #puts cmd
+        puts cmd
         print("        Configure Modes: ")
-        cmdstatus = system("#{cmd}")
+        #cmdstatus = system("#{cmd}")
     end
     
     # configure ibeacon frame
@@ -438,8 +447,9 @@ def configure(hash, port)
         postfix = "00"
         frame = prefix + hash["ibeacon"] + postfix
         cmd = "#{precmd}rbcom -P00000000 frame0 #{frame}"
+        puts cmd
         print("      Configure iBeacon: ")
-        cmdstatus = system("#{cmd}")
+        #cmdstatus = system("#{cmd}")
     end
     
      # configure altbeacon frame
@@ -448,9 +458,9 @@ def configure(hash, port)
         postfix = "00"
         frame = prefix + hash["ibeacon"] + postfix
         cmd = "#{precmd}rbcom -P00000000 frame1 #{frame}"
-        #puts cmd
+        puts cmd
         print("    Configure AltBeacon: ")
-        cmdstatus = system("#{cmd}")
+        #cmdstatus = system("#{cmd}")
     end
     
     # configure eddystone uid frame
@@ -459,9 +469,9 @@ def configure(hash, port)
         postfix = "0000"
         frame = prefix + hash["eddystoneuid"] + postfix
         cmd = "#{precmd}rbcom -P00000000 frame2 #{frame}"
-        #puts cmd
+        puts cmd
         print("Configure Eddystone UID: ")
-        cmdstatus = system("#{cmd}")
+        #cmdstatus = system("#{cmd}")
     end
     
     # configure eddystone url frame
@@ -473,36 +483,36 @@ def configure(hash, port)
         postfix = padding[0,padding.length - urldata.length]
         frame = prefix + urldata + postfix
         cmd = "#{precmd}rbcom -P00000000 frame3 #{frame}"
-        #system("#{cmd} 2>/dev/null 1>/dev/null")
+        puts cmd
         print("Configure Eddystone URL: ")
-        cmdstatus = system("#{cmd}")
+        #cmdstatus = system("#{cmd}")
     end
     
     # configure rate
     if (cmdstatus and hash.key?("rate"))
         rate = hash["rate"].to_i * 10
         cmd = "#{precmd}rbcom -P00000000 advrate #{rate}"
-        #puts cmd
+        puts cmd
         print("         Configure Rate: ")
-        cmdstatus = system("#{cmd}")
+        #cmdstatus = system("#{cmd}")
     end
     
     # configure txpower
     if (cmdstatus and hash.key?("txpower"))
         txpower = hash["txpower"].to_i
         cmd = "#{precmd}rbcom -P00000000 txpwr #{txpower}"
-        #puts cmd
+        puts cmd
         print("     Configure TX Power: ")
-        cmdstatus = system("#{cmd}")
+        #cmdstatus = system("#{cmd}")
     end
     
     # configure pin
     if (cmdstatus and hash.key?("pin"))
         pin = hash["pin"]
         cmd = "#{precmd}rbcom -P00000000 chgpin #{pin}"
-        #puts cmd
+        puts cmd
         print("          Configure PIN: ")
-        cmdstatus = system("#{cmd}")
+        #cmdstatus = system("#{cmd}")
     end
     
     return cmdstatus
@@ -525,20 +535,20 @@ if options.csvfile
 
   configfile = ConfigFile.new(options.csvfile)
   configfile.hashed.each_index do |i|
-    loop do
-      system("clear")
-      puts
-      print "Please insert beacon to flash (ctrl-c to cancel)  "
-      play_sound NEXT_SOUND if NEXT_SOUND.exist?
-      wait_for_beacon(options.port)
-      
-      binary = BinaryFile.new(firmwarefile)
-      break if (flash(binary, options.port))
-      
-      puts
-      puts "Press ENTER to restart (ctrl-c to cancel)  "
-      input = gets
-    end
+#    loop do
+#      system("clear")
+#      puts
+#      print "Please insert beacon to flash (ctrl-c to cancel)  "
+#      play_sound NEXT_SOUND if NEXT_SOUND.exist?
+#      wait_for_beacon(options.port)
+#      
+#      binary = BinaryFile.new(firmwarefile)
+#      break if (flash(binary, options.port))
+#      
+#      puts
+#      puts "Press ENTER to restart (ctrl-c to cancel)  "
+#      input = gets
+#    end
       
     play_sound NEXT_SOUND if NEXT_SOUND.exist?
     

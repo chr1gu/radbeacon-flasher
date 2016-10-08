@@ -170,7 +170,7 @@ class ConfigFile
   def initialize(config_file_name)
     @configfilepath = File.expand_path "#{config_file_name}"
     csv_text = File.read(config_file_name)
-    puts csv_text.squeeze("\r\n").gsub(/(\r\n)+/, "\r\n")
+#    puts csv_text.squeeze("\r\n").gsub(/(\r\n)+/, "\r\n")
     rows = CSV.parse(csv_text.squeeze("\r\n").gsub(/(\r\n)+/, "\r\n")).to_a
     cols = rows.shift
     @confighashed = Array.new
@@ -357,17 +357,26 @@ def notifyConfigDetails(hash)
     if (hash.key?("name"))
         puts("                   Name: " + hash["name"])
     end
-    if (hash.key?("modes"))
-        puts("           Beacon Modes: " + hash["modes"].upcase)
+    if (hash.key?("ib-enable"))
+        puts("         iBeacon Enable: " + hash["ib-enable"])
     end
-    if (hash.key?("ibeacon"))
-        puts(" iBeacon/AltBeacon Data: " + hash["ibeacon"].upcase)
+    if (hash.key?("ab-enable"))
+        puts("       altBeacon Enable: " + hash["ab-enable"])
     end
-    if (hash.key?("eddystoneuid"))
-        puts("     Eddystone UID Data: " + hash["eddystoneuid"].upcase)
+    if (hash.key?("euid-enable"))
+        puts("   Eddystone UID Enable: " + hash["euid-enable"])
     end
-    if (hash.key?("eddystoneurl"))
-        puts("     Eddystone URL Data: " + hash["eddystoneurl"].upcase)
+    if (hash.key?("eurl-enable"))
+        puts("   Eddystone URL Enable: " + hash["eurl-enable"])
+    end
+    if (hash.key?("ia-uuid") and hash.key?("ia-major") and hash.key?("ia-minor") and hash.key?("ia-power"))
+        puts(" iBeacon/AltBeacon Data: " + hash["ia-uuid"].upcase + " " + hash["ia-major"] + " " + hash["ia-minor"] + " " + hash["ia-power"])
+    end
+    if (hash.key?("euid-namespace") and hash.key?("euid-instance") and hash.key?("euid-power"))
+        puts("     Eddystone UID Data: " + hash["euid-namespace"].upcase + " " + hash["euid-instance"] + " " + hash["euid-power"])
+    end
+    if (hash.key?("eurl-url") and hash.key?("eurl-power"))
+        puts("     Eddystone URL Data: " + hash["eurl-url"] + " " + hash["eurl-power"])
     end
     if (hash.key?("rate"))
         puts("                   Rate: " + hash["rate"].upcase)
@@ -408,6 +417,83 @@ def flash(binary, port)
   end
 end
 
+
+def encodeurl(url)
+
+  
+  schemes = [
+    "http://www.",
+    "https://www.",
+    "http://",
+    "https://",
+    ]
+
+  extensions = [
+    ".com/", ".org/", ".edu/", ".net/", ".info/", ".biz/", ".gov/",
+    ".com", ".org", ".edu", ".net", ".info", ".biz", ".gov",
+  ]
+  
+  data = ""
+  
+  s = 0
+  i = 0
+  e = 0
+  l = 0
+  for scheme in schemes
+    if url.start_with?(scheme)
+      data = "%02X" % s
+      i += scheme.length
+      break
+    end
+    s += 1
+  end
+  
+  if s == scheme.length
+    puts "ERROR: Invalid Eddystone URL scheme"
+    exit
+  end
+  
+  while i < url.length
+    if url[i] == '.'
+      for expansion in extensions
+        if url[i..-1].start_with?(expansion)
+          data << "%02X" % e
+          i += expansion.length
+          break
+        end
+        e += 1
+      end
+      if url[i] == '.'
+        data << "2E"
+        i += 1
+      end
+    else
+      data << "%02X" % url[i].ord
+      i += 1
+    end
+    l += 1
+  end
+  
+  if l > 18
+    puts "ERROR: Invalid Eddystone URL length #{l}"
+    exit
+  end
+  
+  return data
+end
+
+def getTxPowerSetting(db)
+
+  settings = {"-23"=>0,"-21"=>1,"-20"=>2,"-18"=>3,"-16"=>4,"-14"=>5,"-12"=>6,"-11"=>7,"-8"=>8,"-7"=>9,"-5"=>10,"-4"=>11,"-2"=>12,"-1"=>13,"+0"=>14,"+3"=>15,"0"=>14,"3"=>15}
+  if settings.key?(db)
+    return settings[db]
+  else
+    puts "ERROR: #{db} is not a valid tx power value"
+    exit
+  end
+end
+  
+  
 def configure(hash, port)
   puts "WARNING: #{port} does not exist" unless File.exist? port
   
@@ -418,62 +504,63 @@ def configure(hash, port)
     if (cmdstatus and hash.key?("name"))
         name = hash["name"]
         cmd = "#{precmd}rbcom -P00000000 name '#{name}'"
-        #puts cmd
+        puts cmd
         print("         Configure Name: ")
         cmdstatus = system("#{cmd}")
     end
     
     # configure modes
-    if (cmdstatus and hash.key?("modes"))
-        modes = hash["modes"]
+    if (cmdstatus and hash.key?("ib-enable") and hash.key?("ab-enable") and hash.key?("euid-enable") and hash.key?("eurl-enable"))
+        modes = hash["ib-enable"].to_i + hash["ab-enable"].to_i + hash["euid-enable"].to_i + hash["eurl-enable"].to_i
         cmd = "#{precmd}rbcom -P00000000 bctype #{modes}"
-        #puts cmd
+        puts cmd
         print("        Configure Modes: ")
         cmdstatus = system("#{cmd}")
     end
     
     # configure ibeacon frame
-    if (cmdstatus and hash.key?("ibeacon"))
+    if (cmdstatus and hash.key?("ia-uuid") and hash.key?("ia-major") and hash.key?("ia-minor") and hash.key?("ia-power"))
         prefix = "0201061aff4c000215"
         postfix = "00"
-        frame = prefix + hash["ibeacon"] + postfix
+        frame = prefix + hash["ia-uuid"].tr('-', '') + "%04X"%hash["ia-major"] + "%04X"%hash["ia-minor"] + "%02X"%(256 + hash["ia-power"].to_i) + postfix
         cmd = "#{precmd}rbcom -P00000000 frame0 #{frame}"
+        puts cmd
         print("      Configure iBeacon: ")
         cmdstatus = system("#{cmd}")
     end
     
      # configure altbeacon frame
-    if (cmdstatus and hash.key?("ibeacon"))
+    if (cmdstatus and hash.key?("ia-uuid") and hash.key?("ia-major") and hash.key?("ia-minor") and hash.key?("ia-power"))
         prefix = "0201061bff1801beac"
         postfix = "00"
-        frame = prefix + hash["ibeacon"] + postfix
+        frame = prefix + hash["ia-uuid"].tr('-', '') + "%04X"%hash["ia-major"] + "%04X"%hash["ia-minor"] + "%02X"%(256 + hash["ia-power"].to_i) + postfix
         cmd = "#{precmd}rbcom -P00000000 frame1 #{frame}"
-        #puts cmd
+        puts cmd
         print("    Configure AltBeacon: ")
         cmdstatus = system("#{cmd}")
     end
     
     # configure eddystone uid frame
-    if (cmdstatus and hash.key?("eddystoneuid"))
+    if (cmdstatus and hash.key?("euid-namespace") and hash.key?("euid-instance") and hash.key?("euid-power"))
         prefix = "0201060303aafe1716aafe00"
         postfix = "0000"
-        frame = prefix + hash["eddystoneuid"] + postfix
+        frame = prefix + "%02X"%(256 + hash["euid-power"].to_i) + hash["euid-namespace"] + hash["euid-instance"] + postfix
         cmd = "#{precmd}rbcom -P00000000 frame2 #{frame}"
-        #puts cmd
+        puts cmd
         print("Configure Eddystone UID: ")
         cmdstatus = system("#{cmd}")
     end
     
     # configure eddystone url frame
-    if (cmdstatus and hash.key?("eddystoneurl"))
-        urldata = hash["eddystoneurl"]
-        pdulength = '%02X' % ( urldata.length/2 + 4 )
+    if (cmdstatus and hash.key?("eurl-url") and hash.key?("eurl-power"))
+        urldata = encodeurl(hash["eurl-url"])
+        pdulength = '%02X' % ( urldata.length/2 + 5 )
         padding = "00000000000000000000000000000000000000"
         prefix = "0201060303aafe#{pdulength}16aafe10"
-        postfix = padding[0,padding.length - urldata.length]
-        frame = prefix + urldata + postfix
+        postfix = padding[0,padding.length - urldata.length - 2]
+        frame = prefix + "%02X"%(256 + hash["eurl-power"].to_i) + urldata + postfix
         cmd = "#{precmd}rbcom -P00000000 frame3 #{frame}"
-        #system("#{cmd} 2>/dev/null 1>/dev/null")
+        puts cmd
         print("Configure Eddystone URL: ")
         cmdstatus = system("#{cmd}")
     end
@@ -482,16 +569,16 @@ def configure(hash, port)
     if (cmdstatus and hash.key?("rate"))
         rate = hash["rate"].to_i * 10
         cmd = "#{precmd}rbcom -P00000000 advrate #{rate}"
-        #puts cmd
+        puts cmd
         print("         Configure Rate: ")
         cmdstatus = system("#{cmd}")
     end
     
     # configure txpower
     if (cmdstatus and hash.key?("txpower"))
-        txpower = hash["txpower"].to_i
+        txpower = getTxPowerSetting(hash["txpower"])
         cmd = "#{precmd}rbcom -P00000000 txpwr #{txpower}"
-        #puts cmd
+        puts cmd
         print("     Configure TX Power: ")
         cmdstatus = system("#{cmd}")
     end
@@ -500,7 +587,7 @@ def configure(hash, port)
     if (cmdstatus and hash.key?("pin"))
         pin = hash["pin"]
         cmd = "#{precmd}rbcom -P00000000 chgpin #{pin}"
-        #puts cmd
+        puts cmd
         print("          Configure PIN: ")
         cmdstatus = system("#{cmd}")
     end

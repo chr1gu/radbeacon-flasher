@@ -511,7 +511,19 @@ def configure(hash, port)
     
     # configure modes
     if (cmdstatus and hash.key?("ib-enable") and hash.key?("ab-enable") and hash.key?("euid-enable") and hash.key?("eurl-enable"))
-        modes = hash["ib-enable"].to_i + hash["ab-enable"].to_i + hash["euid-enable"].to_i + hash["eurl-enable"].to_i
+        modes = 0
+        if (hash["ib-enable"].to_i > 0)
+            modes += 1
+        end
+        if (hash["ab-enable"].to_i > 0)
+            modes += 2
+        end
+        if (hash["euid-enable"].to_i > 0)
+            modes += 4
+        end
+        if (hash["eurl-enable"].to_i > 0)
+            modes += 8
+        end
         cmd = "#{precmd}rbcom -P00000000 bctype #{modes}"
         #puts cmd
         print("        Configure Modes: ")

@@ -504,7 +504,7 @@ def configure(hash, port)
     if (cmdstatus and hash.key?("name"))
         name = hash["name"]
         cmd = "#{precmd}rbcom -P00000000 name '#{name}'"
-        puts cmd
+        #puts cmd
         print("         Configure Name: ")
         cmdstatus = system("#{cmd}")
     end
@@ -513,7 +513,7 @@ def configure(hash, port)
     if (cmdstatus and hash.key?("ib-enable") and hash.key?("ab-enable") and hash.key?("euid-enable") and hash.key?("eurl-enable"))
         modes = hash["ib-enable"].to_i + hash["ab-enable"].to_i + hash["euid-enable"].to_i + hash["eurl-enable"].to_i
         cmd = "#{precmd}rbcom -P00000000 bctype #{modes}"
-        puts cmd
+        #puts cmd
         print("        Configure Modes: ")
         cmdstatus = system("#{cmd}")
     end
@@ -524,7 +524,7 @@ def configure(hash, port)
         postfix = "00"
         frame = prefix + hash["ia-uuid"].tr('-', '') + "%04X"%hash["ia-major"] + "%04X"%hash["ia-minor"] + "%02X"%(256 + hash["ia-power"].to_i) + postfix
         cmd = "#{precmd}rbcom -P00000000 frame0 #{frame}"
-        puts cmd
+        #puts cmd
         print("      Configure iBeacon: ")
         cmdstatus = system("#{cmd}")
     end
@@ -535,7 +535,7 @@ def configure(hash, port)
         postfix = "00"
         frame = prefix + hash["ia-uuid"].tr('-', '') + "%04X"%hash["ia-major"] + "%04X"%hash["ia-minor"] + "%02X"%(256 + hash["ia-power"].to_i) + postfix
         cmd = "#{precmd}rbcom -P00000000 frame1 #{frame}"
-        puts cmd
+        #puts cmd
         print("    Configure AltBeacon: ")
         cmdstatus = system("#{cmd}")
     end
@@ -546,7 +546,7 @@ def configure(hash, port)
         postfix = "0000"
         frame = prefix + "%02X"%(256 + hash["euid-power"].to_i) + hash["euid-namespace"] + hash["euid-instance"] + postfix
         cmd = "#{precmd}rbcom -P00000000 frame2 #{frame}"
-        puts cmd
+        #puts cmd
         print("Configure Eddystone UID: ")
         cmdstatus = system("#{cmd}")
     end
@@ -560,7 +560,7 @@ def configure(hash, port)
         postfix = padding[0,padding.length - urldata.length - 2]
         frame = prefix + "%02X"%(256 + hash["eurl-power"].to_i) + urldata + postfix
         cmd = "#{precmd}rbcom -P00000000 frame3 #{frame}"
-        puts cmd
+        #puts cmd
         print("Configure Eddystone URL: ")
         cmdstatus = system("#{cmd}")
     end
@@ -569,7 +569,7 @@ def configure(hash, port)
     if (cmdstatus and hash.key?("rate"))
         rate = hash["rate"].to_i * 10
         cmd = "#{precmd}rbcom -P00000000 advrate #{rate}"
-        puts cmd
+        #puts cmd
         print("         Configure Rate: ")
         cmdstatus = system("#{cmd}")
     end
@@ -578,7 +578,7 @@ def configure(hash, port)
     if (cmdstatus and hash.key?("txpower"))
         txpower = getTxPowerSetting(hash["txpower"])
         cmd = "#{precmd}rbcom -P00000000 txpwr #{txpower}"
-        puts cmd
+        #puts cmd
         print("     Configure TX Power: ")
         cmdstatus = system("#{cmd}")
     end
@@ -587,7 +587,7 @@ def configure(hash, port)
     if (cmdstatus and hash.key?("pin"))
         pin = hash["pin"]
         cmd = "#{precmd}rbcom -P00000000 chgpin #{pin}"
-        puts cmd
+        #puts cmd
         print("          Configure PIN: ")
         cmdstatus = system("#{cmd}")
     end

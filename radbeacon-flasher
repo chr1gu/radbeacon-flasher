@@ -267,8 +267,14 @@ OptionParser.new do |opts|
   opts.on("-w", "--watch", "Run forever and watch for new beacons") do
     options.watch = true
   end
-  opts.on("-cCSVFILE", "--configure=csvfile", "Configuration CSF File (#{options.csvfile})") do |csvfile|
-    options.csvfile = csvfile
+  opts.on("-cCSVFILE[:XX]", "--configure=csvfile[:XX]", "Configuration CSF File (#{options.csvfile})") do |csvfile|
+    configInput = csvfile.split(':')
+    options.csvfile = configInput[0]
+    if (configInput.length == 2)
+        options.resumeNumber = configInput[1]
+    else
+        options.resumeNumber = 1
+    end
   end
   opts.on("-pPORT", "--port=port", "Logical Port (#{options.port})") do |port|
     options.port = port
@@ -350,9 +356,11 @@ def notify_failure
 end
 
 
-def notifyConfigDetails(hash)
+def notifyConfigDetails(hash, file, entry)
     puts
-    puts
+    puts("===================================================================")
+    puts("    Config File: " + file)
+    puts("    Config Entry: " + entry)
     puts("===================================================================")
     if (hash.key?("name"))
         puts("                   Name: " + hash["name"])
@@ -621,53 +629,58 @@ firmware_file_name = options.firmware || "#{FirmwareFile::DEFAULT_PREFIX}#{optio
 firmwarefile = FirmwareFile.new(firmware_file_name)
     
 if options.csvfile
-
+  resumeNumber = options.resumeNumber.to_i
+  if (resumeNumber < 1)
+    resumeNumber = 1
+  end
   configfile = ConfigFile.new(options.csvfile)
   configfile.hashed.each_index do |i|
-    loop do
-      system("clear")
-      puts
-      print "Please insert beacon to flash (ctrl-c to cancel)  "
-      play_sound NEXT_SOUND if NEXT_SOUND.exist?
-      wait_for_beacon(options.port)
+    if (i == resumeNumber - 1)
+        loop do
+          system("clear")
+          puts
+          print "Please insert beacon to flash (ctrl-c to cancel)  "
+          play_sound NEXT_SOUND if NEXT_SOUND.exist?
+          wait_for_beacon(options.port)
       
-      binary = BinaryFile.new(firmwarefile)
-      break if (flash(binary, options.port))
+          binary = BinaryFile.new(firmwarefile)
+          break if (flash(binary, options.port))
       
-      puts
-      puts "Press ENTER to restart (ctrl-c to cancel)  "
-      input = gets
-    end
+          puts
+          puts "Press ENTER to restart (ctrl-c to cancel)  "
+          input = gets
+        end
       
-    play_sound NEXT_SOUND if NEXT_SOUND.exist?
+        play_sound NEXT_SOUND if NEXT_SOUND.exist?
     
-    print "Please REMOVE AND REINSERT BEACON to configure (ctrl-c to cancel)  "
-    wait_for_remove_beacon(options.port)
-    wait_for_beacon(options.port)
+        print "Please REMOVE AND REINSERT BEACON to configure (ctrl-c to cancel)  "
+        wait_for_remove_beacon(options.port)
+        wait_for_beacon(options.port)
     
-    hash = configfile.hashed[i]
-    notifyConfigDetails(hash)
-    play_sound START_SOUND if START_SOUND.exist?
+        hash = configfile.hashed[i]
+        notifyConfigDetails(hash, options.csvfile, resumeNumber.to_s)
+        play_sound START_SOUND if START_SOUND.exist?
  
-    status = configure(hash, options.port)
-    if (status)
-      play_sound FINISH_SOUND if FINISH_SOUND.exist?
-      puts
-      print "SUCCESS! Please remove configured beacon (ctrl-c to cancel)  "
-      wait_for_remove_configured_beacon(options.port)
-      puts
-      puts
-      puts "Press ENTER to continue to next beacon  (ctrl-c to cancel)  "
-      input = gets
-    else
-      play_sound FINISH_SOUND if FINISH_SOUND.exist?
-      puts
-      print "FAILED! Please remove beacon and check CSV for invalid values "
-      wait_for_remove_configured_beacon(options.port)
-      
-      puts
-      puts
-      exit
+        status = configure(hash, options.port)
+        if (status)
+          play_sound FINISH_SOUND if FINISH_SOUND.exist?
+          puts
+          print "SUCCESS! Please remove configured beacon (ctrl-c to cancel)  "
+          wait_for_remove_configured_beacon(options.port)
+          puts
+          puts
+          puts "Press ENTER to continue to next beacon  (ctrl-c to cancel)  "
+          input = gets
+          resumeNumber += 1
+        else
+          play_sound FINISH_SOUND if FINISH_SOUND.exist?
+          puts
+          print "FAILED! Please remove beacon and check CSV for invalid values "
+          wait_for_remove_configured_beacon(options.port)
+          puts
+          puts
+          exit
+        end
     end
   end
   play_sound NEXT_SOUND if NEXT_SOUND.exist?

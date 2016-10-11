@@ -267,7 +267,10 @@ OptionParser.new do |opts|
   opts.on("-w", "--watch", "Run forever and watch for new beacons") do
     options.watch = true
   end
-  opts.on("-cCSVFILE[:XX]", "--configure=csvfile[:XX]", "Configuration CSF File (#{options.csvfile})") do |csvfile|
+  opts.on("-r", "--resume", "Resume on last attempted configuration CSV File entry") do
+    options.resume = true
+  end
+  opts.on("-cCSVFILE[:XX]", "--configure=csvfile[:XX]", "Configuration CSV File (#{options.csvfile})") do |csvfile|
     configInput = csvfile.split(':')
     options.csvfile = configInput[0]
     if (configInput.length == 2)
@@ -629,6 +632,10 @@ firmware_file_name = options.firmware || "#{FirmwareFile::DEFAULT_PREFIX}#{optio
 firmwarefile = FirmwareFile.new(firmware_file_name)
     
 if options.csvfile
+  if options.resume
+    options.resumeNumber = File.read('./resume.txt')
+  end
+  puts("resumeNumber from file " + options.resumeNumber)
   resumeNumber = options.resumeNumber.to_i
   if (resumeNumber < 1)
     resumeNumber = 1
@@ -672,6 +679,7 @@ if options.csvfile
           puts "Press ENTER to continue to next beacon  (ctrl-c to cancel)  "
           input = gets
           resumeNumber += 1
+          File.open('./resume.txt', 'w') { |file| file.write(resumeNumber) }
         else
           play_sound FINISH_SOUND if FINISH_SOUND.exist?
           puts

@@ -305,7 +305,7 @@ end
 def wait_for_remove_beacon(port)
   loop do
     # TODO: Refactor so we are not duplicating this util specific code
-    break unless `dfu-util -l`.include?("Found DFU: [2458:fffe]")
+    break unless `dfu-util -l 2>/dev/null`.include?("Found DFU: [2458:fffe]")
     sleep 0.1
     ProgressSpinner.tick
   end

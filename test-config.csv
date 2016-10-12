@@ -1,5 +1,5 @@
 pin,name,rate,txpower,ib-enable,ab-enable,euid-enable,eurl-enable,ia-uuid,ia-major,ia-minor,ia-power,euid-namespace,euid-instance,euid-power,eurl-url,eurl-power
-00000000,RadBeacon USB,10,+3,1,1,1,1,2F234454-CF6D-4A0F-ADF2-F4911BA9FFA6,0,1,-66,2F234454F4911BA9FFA6,000000000001,-25,https://www.radiusnetworks.com,-25
+00000000,RadBeacon USB,11,+3,1,1,1,1,2F234454-CF6D-4A0F-ADF2-F4911BA9FFA6,0,65535,-66,2F234454F4911BA9FFA6,000000000001,-25,https://www.radiusnetworks.com,-25
 00000000,RadBeacon USB,10,+3,1,1,1,1,2F234454-CF6D-4A0F-ADF2-F4911BA9FFA6,0,2,-66,2F234454F4911BA9FFA6,000000000002,-25,https://www.radiusnetworks.com,-25
 00000000,RadBeacon USB,10,+3,1,1,1,1,2F234454-CF6D-4A0F-ADF2-F4911BA9FFA6,0,3,-66,2F234454F4911BA9FFA6,000000000003,-25,https://www.radiusnetworks.com,-25
 00000000,RadBeacon USB,10,+3,1,1,1,1,2F234454-CF6D-4A0F-ADF2-F4911BA9FFA6,0,4,-66,2F234454F4911BA9FFA6,000000000004,-25,https://www.radiusnetworks.com,-25

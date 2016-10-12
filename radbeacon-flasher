@@ -460,6 +460,7 @@ def encodeurl(url)
   end
   
   if s == scheme.length
+    puts
     puts "ERROR: Invalid Eddystone URL scheme"
     exit
   end
@@ -486,6 +487,7 @@ def encodeurl(url)
   end
   
   if l > 18
+    puts
     puts "ERROR: Invalid Eddystone URL length #{l}"
     exit
   end
@@ -499,9 +501,185 @@ def getTxPowerSetting(db)
   if settings.key?(db)
     return settings[db]
   else
+    puts
     puts "ERROR: #{db} is not a valid tx power value"
     exit
   end
+end
+
+def validate(hash, entry)
+
+    # validate name
+    if (hash.key?("name"))
+        if (hash["name"].length > 24)
+            puts
+            puts("ERROR: Entry " + entry.to_s + ", Name exceeds 24 characters")
+            exit
+        end
+    else
+        puts
+        puts("ERROR: Entry " + entry.to_s + ", name value is missing")
+        exit
+    end
+    
+    # validate enable
+    if (!hash.key?("ib-enable"))
+        puts
+        puts("ERROR: Entry " + entry.to_s + ", ib-enable is missing")
+        exit
+    end
+    if (!hash.key?("ab-enable"))
+        puts
+        puts("ERROR: Entry " + entry.to_s + ", ab-enable is missing")
+        exit
+    end
+    if (!hash.key?("euid-enable"))
+        puts
+        puts("ERROR: Entry " + entry.to_s + ", euid-enable is missing")
+        exit
+    end
+    if (!hash.key?("eurl-enable"))
+        puts
+        puts("ERROR: Entry " + entry.to_s + ", eurl-enable is missing")
+        exit
+    end
+        
+    # validate ibeacon and altbeacon
+    if (hash.key?("ia-uuid"))
+        if ( hash["ia-uuid"].to_s !~ /\A[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}\z/ )
+            puts
+            puts("ERROR: Entry " + entry.to_s + ", ia-uuid is invalid")
+            exit
+        end
+    else
+        puts
+        puts("ERROR: Entry " + entry.to_s + ", ia-uuid is missing")
+        exit
+    end
+    if (hash.key?("ia-major"))
+        if ( hash["ia-major"].to_i < 0 || hash["ia-major"].to_i > 65535 )
+            puts
+            puts("ERROR: Entry " + entry.to_s + ", ia-major is out of range")
+            exit
+        end
+    else
+        puts
+        puts("ERROR: Entry " + entry.to_s + ", ia-major is missing")
+        exit
+    end
+    if (hash.key?("ia-minor"))
+        if ( hash["ia-minor"].to_i < 0 || hash["ia-minor"].to_i > 65535 )
+            puts
+            puts("ERROR: Entry " + entry.to_s + ", ia-minor is out of range")
+            exit
+        end
+    else
+        puts
+        puts("ERROR: Entry " + entry.to_s + ", ia-minor is missing")
+        exit
+    end
+    if (hash.key?("ia-power"))
+        if ( hash["ia-power"].to_i > -1 || hash["ia-power"].to_i < -127 )
+            puts
+            puts("ERROR: Entry " + entry.to_s + ", ia-power is out of range")
+            exit
+        end
+    else
+        puts
+        puts("ERROR: Entry " + entry.to_s + ", ia-power is missing")
+        exit
+    end
+    
+    # validate eddystone uid
+    if (hash.key?("euid-namespace"))
+        if ( hash["euid-namespace"].to_s !~ /\A[A-Fa-f0-9]{20}\z/ )
+            puts
+            puts("ERROR: Entry " + entry.to_s + ", euid-namespace is invalid")
+            exit
+        end
+    else
+        puts
+        puts("ERROR: Entry " + entry.to_s + ", euid-namespace is missing")
+        exit
+    end
+    if (hash.key?("euid-instance"))
+        if ( hash["euid-instance"].to_s !~ /\A[A-Fa-f0-9]{12}\z/ )
+            puts
+            puts("ERROR: Entry " + entry.to_s + ", euid-instance is invalid")
+            exit
+        end
+    else
+        puts
+        puts("ERROR: Entry " + entry.to_s + ", euid-instance is missing")
+        exit
+    end
+    if (hash.key?("euid-power"))
+        if ( hash["euid-power"].to_i > -1 || hash["euid-power"].to_i < -127 )
+            puts
+            puts("ERROR: Entry " + entry.to_s + ", euid-power is out of range")
+            exit
+        end
+    else
+        puts
+        puts("ERROR: Entry " + entry.to_s + ", euid-power is missing")
+        exit
+    end
+    
+    # validate eddystone url
+    if (hash.key?("eurl-url"))
+        urldata = encodeurl(hash["eurl-url"])
+    else
+        puts
+        puts("ERROR: Entry " + entry.to_s + ", eurl-url is missing")
+        exit
+    end
+    if (hash.key?("eurl-power"))
+        if ( hash["eurl-power"].to_i > -1 || hash["eurl-power"].to_i < -127 )
+            puts
+            puts("ERROR: Entry " + entry.to_s + ", eurl-power is out of range")
+            exit
+        end
+    else
+        puts
+        puts("ERROR: Entry " + entry.to_s + ", eurl-power is missing")
+        exit
+    end
+    
+    # validate rate
+    if (hash.key?("rate"))
+        if ( hash["rate"].to_i < 1 || hash["eurl-power"].to_i > 10)
+            puts
+            puts("ERROR: Entry " + entry.to_s + ", rate is out of range")
+            exit
+        end
+    else
+        puts
+        puts("ERROR: Entry " + entry.to_s + ", rate is missing")
+        exit
+    end
+    
+    # validate txpower
+    if (hash.key?("txpower"))
+        txpower = getTxPowerSetting(hash["txpower"])
+    else
+        puts
+        puts("ERROR: Entry " + entry.to_s + ", txpower is missing")
+        exit
+    end
+    
+    #validate pin
+    if (hash.key?("pin"))
+        if ( hash["pin"].length != 8)
+            puts
+            puts("ERROR: Entry " + entry.to_s + ", pin length is invalid")
+            exit
+        end
+    else
+        puts
+        puts("ERROR: Entry " + entry.to_s + ", pin is missing")
+        exit
+    end
+    
 end
   
   
@@ -519,7 +697,6 @@ def configure(hash, port)
         print("         Configure Name: ")
         cmdstatus = system("#{cmd}")
     end
-    
     # configure modes
     if (cmdstatus and hash.key?("ib-enable") and hash.key?("ab-enable") and hash.key?("euid-enable") and hash.key?("eurl-enable"))
         modes = 0
@@ -635,11 +812,11 @@ if options.csvfile
   if options.resume
     options.resumeNumber = File.read('./resume.txt')
   end
-  puts("resumeNumber from file " + options.resumeNumber)
   resumeNumber = options.resumeNumber.to_i
   if (resumeNumber < 1)
     resumeNumber = 1
   end
+  File.open('./resume.txt', 'w') { |file| file.write(resumeNumber) }
   configfile = ConfigFile.new(options.csvfile)
   configfile.hashed.each_index do |i|
     if (i == resumeNumber - 1)
@@ -665,6 +842,7 @@ if options.csvfile
         wait_for_beacon(options.port)
     
         hash = configfile.hashed[i]
+        validate(hash, resumeNumber)
         notifyConfigDetails(hash, options.csvfile, resumeNumber.to_s)
         play_sound START_SOUND if START_SOUND.exist?
  

@@ -28,6 +28,8 @@ require "ostruct"
 require "net/http"
 require "uri"
 require 'csv'
+require 'yaml'
+require 'curses'
 #
 # Default Settings
 #
@@ -241,12 +243,19 @@ class Flasher
     # try without sudo first, if that fails use sudo.
     Dir.chdir(dir) do |path|
       precmd = RUBY_PLATFORM.include?("darwin") ? "" : "sudo "
-      cmd = "#{precmd}dfu-util -d 2458:fffe -D #{name}"
-
+      cmd = "#{precmd}dfu-util -d 2458:fffe -D #{name} 2>1"
       # using system so we get the output of dfu-util
-      print "\033[34m"
-      system(cmd)
-      print "\033[0m"
+#      print "\033[34m"
+#      system(cmd)
+      output = `#{cmd}`
+#      print "\033[0m"
+      if ($?.success?)
+        puts "......................................................SUCCESS!"
+      else
+        puts "......................................................FAILED!"
+        puts output
+        exit
+      end
     end
     $?.success?
   end
@@ -287,6 +296,9 @@ OptionParser.new do |opts|
   end
   opts.on("-FFIRMWARE", "--firmware=firmware", "Firmware Name (n/a) - will override any version setting") do |fw|
     options.firmware = fw
+  end
+opts.on("-lLABELPRINTER", "--labelprinter=printer", "Label Printer (#{options.printer})") do |printer|
+    options.printer = printer
   end
 end.parse!
 
@@ -348,23 +360,25 @@ def notify_success
   system "osascript -e 'display notification \"Success\" with title \"RadBeacon Flasher\"'"
   play_sound SUCCESS_SOUND if SUCCESS_SOUND.exist?
   puts
-  puts "Success!"
+  puts "SUCCESS!"
   puts
 end
 
 def notify_failure
   play_sound FAILURE_SOUND if FAILURE_SOUND.exist?
   puts
-  puts "Failure!"
+  puts "FAILURE!"
 end
 
 
-def notifyConfigDetails(hash, file, entry)
+def notifyConfigDetails(firmware, hash, file, entry, printer)
     puts
-    puts("===================================================================")
-    puts("    Config File: " + file)
+    puts("=========================================================================")
+    puts("   Firmware File: " + firmware)
+    puts("   Label Printer: " + printer)
+    puts("     Config File: " + file)
     puts("    Config Entry: " + entry)
-    puts("===================================================================")
+    puts("=========================================================================")
     if (hash.key?("name"))
         puts("                   Name: " + hash["name"])
     end
@@ -398,25 +412,20 @@ def notifyConfigDetails(hash, file, entry)
     if (hash.key?("pin"))
         puts("                    PIN: " + hash["pin"].upcase)
     end
-    puts("===================================================================")
+    puts("=========================================================================")
 end
 
 
+
 def flash(binary, port)
-  puts
-  puts
-  puts "WARNING: #{port} does not exist" unless File.exist? port
-  puts "Using firmware #{binary.path}"
-  puts "Going into DFU mode..."
+#  puts "WARNING: #{port} does not exist" unless File.exist? port
+  print "Flashing..."
   dfu = DFUer.new port
   notify_start
 
   if (dfu.apply)
-    puts
-    puts "DFU Success, flashing...\n\n"
     flasher = Flasher.new(binary.path)
     if flasher.flash
-      puts
       return true
     else
       notify_failure
@@ -683,117 +692,292 @@ def validate(hash, entry)
 end
   
   
-def configure(hash, port)
-  puts "WARNING: #{port} does not exist" unless File.exist? port
-  
-  cmdstatus = true
-  precmd = RUBY_PLATFORM.include?("darwin") ? "" : "sudo "
-  
+def configure(hash, port, printer)
+#    puts "WARNING: #{port} does not exist" unless File.exist? port
+    
+    precmd = RUBY_PLATFORM.include?("darwin") ? "" : "sudo "
+    
+    # name
+    name = hash["name"]
+
+    # modes
+    modes = 0
+    if (hash["ib-enable"].to_i > 0)
+    modes += 1
+    end
+    if (hash["ab-enable"].to_i > 0)
+    modes += 2
+    end
+    if (hash["euid-enable"].to_i > 0)
+    modes += 4
+    end
+    if (hash["eurl-enable"].to_i > 0)
+    modes += 8
+    end
+
+    #ibeacon frame
+    prefix = "0201061aff4c000215"
+    postfix = "00"
+    frame = prefix + hash["ia-uuid"].tr('-', '') + "%04X"%hash["ia-major"] + "%04X"%hash["ia-minor"] + "%02X"%(256 + hash["ia-power"].to_i) + postfix
+    ibeacon_frame = frame.upcase
+
+    #altbeacon frame
+    prefix = "0201061bff1801beac"
+    postfix = "00"
+    frame = prefix + hash["ia-uuid"].tr('-', '') + "%04X"%hash["ia-major"] + "%04X"%hash["ia-minor"] + "%02X"%(256 + hash["ia-power"].to_i) + postfix
+    altbeacon_frame = frame.upcase
+
+    #eddystone uid frame
+    prefix = "0201060303aafe1716aafe00"
+    postfix = "0000"
+    frame = prefix + "%02X"%(256 + hash["euid-power"].to_i) + hash["euid-namespace"] + hash["euid-instance"] + postfix
+    euid_frame = frame.upcase
+
+    #eddystone url frame
+    urldata = encodeurl(hash["eurl-url"])
+    pdulength = '%02X' % ( urldata.length/2 + 5 )
+    padding = "00000000000000000000000000000000000000"
+    prefix = "0201060303aafe#{pdulength}16aafe10"
+    postfix = padding[0,padding.length - urldata.length - 2]
+    frame = prefix + "%02X"%(256 + hash["eurl-power"].to_i) + urldata + postfix
+    eurl_frame = frame.upcase
+
+    #rate
+    rate = hash["rate"].to_i * 10
+
+    #txpower
+    txpower = getTxPowerSetting(hash["txpower"])
+
+    #pin
+    pin = hash["pin"]
+    
+    #label
+    label1 = hash.key?("label1") ? hash["label1"] : ""
+    label2 = hash.key?("label2") ? hash["label2"] : ""
+    label3 = hash.key?("label3") ? hash["label3"] : ""
+    label4 = hash.key?("label4") ? hash["label4"] : ""
+    label5 = hash.key?("label5") ? hash["label5"] : ""
+    label6 = hash.key?("label6") ? hash["label6"] : ""
+    
+    #configure
+    print "\nConfiguring..."
+    
     # configure name
-    if (cmdstatus and hash.key?("name"))
-        name = hash["name"]
+    if ($?.success? and hash.key?("name"))
         cmd = "#{precmd}rbcom -P00000000 name '#{name}'"
-        #puts cmd
-        print("         Configure Name: ")
-        cmdstatus = system("#{cmd}")
+        print(".")
+        cmdoutput = `#{cmd}`
     end
     # configure modes
-    if (cmdstatus and hash.key?("ib-enable") and hash.key?("ab-enable") and hash.key?("euid-enable") and hash.key?("eurl-enable"))
-        modes = 0
-        if (hash["ib-enable"].to_i > 0)
-            modes += 1
-        end
-        if (hash["ab-enable"].to_i > 0)
-            modes += 2
-        end
-        if (hash["euid-enable"].to_i > 0)
-            modes += 4
-        end
-        if (hash["eurl-enable"].to_i > 0)
-            modes += 8
-        end
+    if ($?.success? and hash.key?("ib-enable") and hash.key?("ab-enable") and hash.key?("euid-enable") and hash.key?("eurl-enable"))
+
         cmd = "#{precmd}rbcom -P00000000 bctype #{modes}"
-        #puts cmd
-        print("        Configure Modes: ")
-        cmdstatus = system("#{cmd}")
+        print(".")
+        cmdoutput = `#{cmd}`
     end
     
     # configure ibeacon frame
-    if (cmdstatus and hash.key?("ia-uuid") and hash.key?("ia-major") and hash.key?("ia-minor") and hash.key?("ia-power"))
-        prefix = "0201061aff4c000215"
-        postfix = "00"
-        frame = prefix + hash["ia-uuid"].tr('-', '') + "%04X"%hash["ia-major"] + "%04X"%hash["ia-minor"] + "%02X"%(256 + hash["ia-power"].to_i) + postfix
-        cmd = "#{precmd}rbcom -P00000000 frame0 #{frame}"
-        #puts cmd
-        print("      Configure iBeacon: ")
-        cmdstatus = system("#{cmd}")
+    if ($?.success? and hash.key?("ia-uuid") and hash.key?("ia-major") and hash.key?("ia-minor") and hash.key?("ia-power"))
+
+        cmd = "#{precmd}rbcom -P00000000 frame0 #{ibeacon_frame}"
+        print(".")
+        cmdoutput = `#{cmd}`
     end
     
      # configure altbeacon frame
-    if (cmdstatus and hash.key?("ia-uuid") and hash.key?("ia-major") and hash.key?("ia-minor") and hash.key?("ia-power"))
-        prefix = "0201061bff1801beac"
-        postfix = "00"
-        frame = prefix + hash["ia-uuid"].tr('-', '') + "%04X"%hash["ia-major"] + "%04X"%hash["ia-minor"] + "%02X"%(256 + hash["ia-power"].to_i) + postfix
-        cmd = "#{precmd}rbcom -P00000000 frame1 #{frame}"
-        #puts cmd
-        print("    Configure AltBeacon: ")
-        cmdstatus = system("#{cmd}")
+    if ($?.success? and hash.key?("ia-uuid") and hash.key?("ia-major") and hash.key?("ia-minor") and hash.key?("ia-power"))
+        cmd = "#{precmd}rbcom -P00000000 frame1 #{altbeacon_frame}"
+        print(".")
+        cmdoutput = `#{cmd}`
     end
     
     # configure eddystone uid frame
-    if (cmdstatus and hash.key?("euid-namespace") and hash.key?("euid-instance") and hash.key?("euid-power"))
-        prefix = "0201060303aafe1716aafe00"
-        postfix = "0000"
-        frame = prefix + "%02X"%(256 + hash["euid-power"].to_i) + hash["euid-namespace"] + hash["euid-instance"] + postfix
-        cmd = "#{precmd}rbcom -P00000000 frame2 #{frame}"
-        #puts cmd
-        print("Configure Eddystone UID: ")
-        cmdstatus = system("#{cmd}")
+    if ($?.success? and hash.key?("euid-namespace") and hash.key?("euid-instance") and hash.key?("euid-power"))
+        cmd = "#{precmd}rbcom -P00000000 frame2 #{euid_frame}"
+        print(".")
+        cmdoutput = `#{cmd}`
     end
     
     # configure eddystone url frame
-    if (cmdstatus and hash.key?("eurl-url") and hash.key?("eurl-power"))
-        urldata = encodeurl(hash["eurl-url"])
-        pdulength = '%02X' % ( urldata.length/2 + 5 )
-        padding = "00000000000000000000000000000000000000"
-        prefix = "0201060303aafe#{pdulength}16aafe10"
-        postfix = padding[0,padding.length - urldata.length - 2]
-        frame = prefix + "%02X"%(256 + hash["eurl-power"].to_i) + urldata + postfix
-        cmd = "#{precmd}rbcom -P00000000 frame3 #{frame}"
-        #puts cmd
-        print("Configure Eddystone URL: ")
-        cmdstatus = system("#{cmd}")
+    if ($?.success? and hash.key?("eurl-url") and hash.key?("eurl-power"))
+        cmd = "#{precmd}rbcom -P00000000 frame3 #{eurl_frame}"
+        print(".")
+        cmdoutput = `#{cmd}`
     end
     
     # configure rate
-    if (cmdstatus and hash.key?("rate"))
-        rate = hash["rate"].to_i * 10
+    if ($?.success? and hash.key?("rate"))
         cmd = "#{precmd}rbcom -P00000000 advrate #{rate}"
-        #puts cmd
-        print("         Configure Rate: ")
-        cmdstatus = system("#{cmd}")
+        print(".")
+        cmdoutput = `#{cmd}`
     end
     
     # configure txpower
-    if (cmdstatus and hash.key?("txpower"))
-        txpower = getTxPowerSetting(hash["txpower"])
+    if ($?.success? and hash.key?("txpower"))
         cmd = "#{precmd}rbcom -P00000000 txpwr #{txpower}"
-        #puts cmd
-        print("     Configure TX Power: ")
-        cmdstatus = system("#{cmd}")
+        print(".")
+        cmdoutput = `#{cmd}`
     end
     
     # configure pin
-    if (cmdstatus and hash.key?("pin"))
-        pin = hash["pin"]
+    if ($?.success? and hash.key?("pin"))
         cmd = "#{precmd}rbcom -P00000000 chgpin #{pin}"
-        #puts cmd
-        print("          Configure PIN: ")
-        cmdstatus = system("#{cmd}")
+        print(".")
+        cmdoutput = `#{cmd}`
+    end
+    if ($?.success?)
+        puts "..........................................SUCCESS!"
+    else
+        puts "..........................................FAILED!"
+        puts cmdoutput
+        exit
+    end
+
+    # verify
+    print "Verifying..."
+    cmd = "#{precmd}rbcom dump getinfo"
+    cmdoutput = `#{cmd}`
+    ymloutput = YAML.load(cmdoutput)
+    
+    # verify name
+    if ($?.success? and hash.key?("name") )
+        if (name.eql? ymloutput["device"]["name"])
+            print(".")
+        else
+            puts "FAILED!"
+            puts "Name:"
+            puts "Expected: #{name}"
+            puts "Received: #{ymloutput["device"]["name"]}"
+            exit
+        end
+    end
+    # verify modes
+    if ($?.success? and hash.key?("ib-enable") and hash.key?("ab-enable") and hash.key?("euid-enable") and hash.key?("eurl-enable"))
+        if (modes.eql? ymloutput["ops"]["bctype"])
+            print(".")
+        else
+            puts "FAILED!"
+            puts "Expected: #{modes}"
+            puts "Received: #{ymloutput["ops"]["bctype"]}"
+            exit
+        end
+    end
+    # verify ibeacon frame
+    if ($?.success? and hash.key?("ia-uuid") and hash.key?("ia-major") and hash.key?("ia-minor") and hash.key?("ia-power"))
+        if (ibeacon_frame.eql? ymloutput["frame0"]["frame"].delete(":").upcase)
+            print(".")
+        else
+            puts "FAILED!"
+            puts "Expected: #{ibeacon_frame}"
+            puts "Received: #{ymloutput["frame0"]["frame"].delete(":").upcase}"
+            exit
+        end
+    end
+    # verify altbeacon frame
+    if ($?.success? and hash.key?("ia-uuid") and hash.key?("ia-major") and hash.key?("ia-minor") and hash.key?("ia-power"))
+        if (altbeacon_frame.eql? ymloutput["frame1"]["frame"].delete(":").upcase)
+            print(".")
+        else
+            puts "FAILED!"
+            puts "Expected: #{altbeacon_frame}"
+            puts "Received: #{ymloutput["frame1"]["frame"].delete(":").upcase}"
+            exit
+        end
+    end
+    # verify eddystone uid frame
+    if ($?.success? and hash.key?("euid-namespace") and hash.key?("euid-instance") and hash.key?("euid-power"))
+        if (euid_frame.eql? ymloutput["frame2"]["frame"].delete(":").upcase)
+            print(".")
+        else
+            puts "FAILED!"
+            puts "Expected: #{euid_frame}"
+            puts "Received: #{ymloutput["frame2"]["frame"].delete(":").upcase}"
+            exit
+        end
+    end
+    # verify eddystone url frame
+    if ($?.success? and hash.key?("eurl-url") and hash.key?("eurl-power"))
+        if (eurl_frame.eql? ymloutput["frame3"]["frame"].delete(":").upcase)
+            print(".")
+        else
+            puts "FAILED!"
+            puts "Expected: #{eurl_frame}"
+            puts "Received: #{ymloutput["frame3"]["frame"].delete(":").upcase}"
+            exit
+        end
+    end
+    # verify rate
+    if ($?.success? and hash.key?("rate"))
+        if (rate.eql? ymloutput["ops"]["advrate"])
+            print(".")
+        else
+            puts "FAILED!"
+            puts "Expected: #{rate}"
+            puts "Received: #{ymloutput["ops"]["advrate"]}"
+            exit
+        end
+    end
+    # verify twpower
+    if ($?.success? and hash.key?("txpower"))
+        if (txpower.eql? ymloutput["ops"]["txpwr"])
+            print(".")
+        else
+            puts "FAILED!"
+            puts "Expected: #{txpower}"
+            puts "Received: #{ymloutput["ops"]["txpwr"]}"
+            exit
+        end
+    end
+    # verify PIN
+    # to do this, I'm going to reset the name with the configured PIN value
+    if ($?.success? and hash.key?("pin") )
+        cmd = "#{precmd}rbcom -P#{pin} name '#{ymloutput["device"]["name"]}'"
+        cmdoutput = `#{cmd}`
+        if ($?.success?)
+            print(".")
+        else
+            puts "FAILED!"
+            puts "Expected: #{pin}"
+            puts "Received: Error testing a name write withthis PIN"
+            exit
+        end
     end
     
-    return cmdstatus
+    if ($?.success?)
+        puts "............................................SUCCESS!"
+    else
+        puts "............................................FAILED!"
+        puts cmdoutput
+        exit
+    end
     
+    # label
+    # verify name
+    if (hash.key?("label1") or hash.key?("label2") or hash.key?("label3") or hash.key?("label4") or hash.key?("label5") or hash.key?("label6"))
+        label = "#{label1}\n#{label2}\n#{label3}\n#{label4}\n#{label5}\n#{label6}"
+        padding = "                                        "
+        display_label = "--------------------------------------------\n" +
+                    "| " + label1 + padding[0,padding.length - label1.length] + " |\n" +
+                    "| " + label2 + padding[0,padding.length - label2.length] + " |\n" +
+                    "| " + label3 + padding[0,padding.length - label3.length] + " |\n" +
+                    "| " + label4 + padding[0,padding.length - label4.length] + " |\n" +
+                    "| " + label5 + padding[0,padding.length - label5.length] + " |\n" +
+                    "| " + label6 + padding[0,padding.length - label6.length] + " |\n" +
+                        "--------------------------------------------\n"
+        puts "Printing label..."
+        puts display_label
+        print_label(label, printer)
+    else
+        puts "Skipping label print: No label data present"
+    end
+    
+    return $?.success?
+    
+end
+
+
+def print_label(label, printer)
+    `lpr -P #{printer} -o landscape -o PageSize=Custom.1x3.5in -o cpi=12 -o lpi=7 -# 1 <<< "#{label}"`
 end
 
 
@@ -807,6 +991,8 @@ end
 
 firmware_file_name = options.firmware || "#{FirmwareFile::DEFAULT_PREFIX}#{options.version}"
 firmwarefile = FirmwareFile.new(firmware_file_name)
+
+printer = options.printer ||  "Brother_QL_700"
     
 if options.csvfile
   if options.resume
@@ -820,17 +1006,19 @@ if options.csvfile
   configfile = ConfigFile.new(options.csvfile)
   configfile.hashed.each_index do |i|
     if (i == resumeNumber - 1)
+    
+        hash = configfile.hashed[i]
+        validate(hash, resumeNumber)
+        notifyConfigDetails(firmware_file_name, hash, options.csvfile, resumeNumber.to_s, printer)
+    
         loop do
-          system("clear")
-          puts
-          print "Please insert beacon to flash (ctrl-c to cancel)  "
+#          system("clear")
+          puts "Please insert beacon to flash (ctrl-c to cancel)  "
           play_sound NEXT_SOUND if NEXT_SOUND.exist?
           wait_for_beacon(options.port)
       
           binary = BinaryFile.new(firmwarefile)
           break if (flash(binary, options.port))
-      
-          puts
           puts "Press ENTER to restart (ctrl-c to cancel)  "
           input = gets
         end
@@ -841,18 +1029,16 @@ if options.csvfile
         wait_for_remove_beacon(options.port)
         wait_for_beacon(options.port)
     
-        hash = configfile.hashed[i]
-        validate(hash, resumeNumber)
-        notifyConfigDetails(hash, options.csvfile, resumeNumber.to_s)
+#        hash = configfile.hashed[i]
+#        validate(hash, resumeNumber)
+#        notifyConfigDetails(hash, options.csvfile, resumeNumber.to_s)
         play_sound START_SOUND if START_SOUND.exist?
  
-        status = configure(hash, options.port)
+        status = configure(hash, options.port, printer)
         if (status)
           play_sound FINISH_SOUND if FINISH_SOUND.exist?
-          puts
-          print "SUCCESS! Please remove configured beacon (ctrl-c to cancel)  "
+          print "Please REMOVE CONFIGURED BEACON (ctrl-c to cancel)  "
           wait_for_remove_configured_beacon(options.port)
-          puts
           puts
           puts "Press ENTER to continue to next beacon  (ctrl-c to cancel)  "
           input = gets
@@ -861,7 +1047,7 @@ if options.csvfile
         else
           play_sound FINISH_SOUND if FINISH_SOUND.exist?
           puts
-          print "FAILED! Please remove beacon and check CSV for invalid values "
+          print "FAILED! Please remove beacon and check CSV values or command line options "
           wait_for_remove_configured_beacon(options.port)
           puts
           puts

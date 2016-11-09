@@ -371,13 +371,13 @@ def notify_failure
 end
 
 
-def notifyConfigDetails(firmware, hash, file, entry, printer)
+def notifyConfigDetails(firmware, hash, file, entry, count, printer)
     puts
     puts("=========================================================================")
     puts("   Firmware File: " + firmware)
     puts("   Label Printer: " + printer)
     puts("     Config File: " + file)
-    puts("    Config Entry: " + entry)
+    puts("    Config Entry: " + entry.to_s + " of " + count.to_s)
     puts("=========================================================================")
     if (hash.key?("name"))
         puts("                   Name: " + hash["name"])
@@ -962,12 +962,7 @@ def configure(hash, port, printer)
     # label
     # verify name
     if (hash.key?("label1") or hash.key?("label2") or hash.key?("label3") or hash.key?("label4") or hash.key?("label5") or hash.key?("label6"))
-        puts label1
-        puts label2
-        puts label3
-        puts label4
-        puts label5
-        puts label6
+        
         label = "#{label1}\n#{label2}\n#{label3}\n#{label4}\n#{label5}\n#{label6}"
         padding = "                                            "
         display_label = " -----------------------------------------------\n" +
@@ -1023,7 +1018,7 @@ if options.csvfile
     
         hash = configfile.hashed[i]
         validate(hash, resumeNumber)
-        notifyConfigDetails(firmware_file_name, hash, options.csvfile, resumeNumber.to_s, printer)
+        notifyConfigDetails(firmware_file_name, hash, options.csvfile, resumeNumber.to_s, configfile.hashed.length, printer)
     
         loop do
 #          system("clear")

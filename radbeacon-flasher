@@ -371,13 +371,13 @@ def notify_failure
 end
 
 
-def notifyConfigDetails(firmware, hash, file, entry, printer)
+def notifyConfigDetails(firmware, hash, file, entry, count, printer)
     puts
     puts("=========================================================================")
     puts("   Firmware File: " + firmware)
     puts("   Label Printer: " + printer)
     puts("     Config File: " + file)
-    puts("    Config Entry: " + entry)
+    puts("    Config Entry: " + entry.to_s + " of " + count.to_s)
     puts("=========================================================================")
     if (hash.key?("name"))
         puts("                   Name: " + hash["name"])
@@ -841,15 +841,15 @@ def configure(hash, port, printer)
     
     # verify name
     if ($?.success? and hash.key?("name") )
-        if (name.eql? ymloutput["device"]["name"])
-            print(".")
-        else
-            puts "FAILED!"
-            puts "Name:"
-            puts "Expected: #{name}"
-            puts "Received: #{ymloutput["device"]["name"]}"
-            exit
-        end
+#        if (name.eql? ymloutput["device"]["name"])
+#            print(".")
+#        else
+#            puts "FAILED!"
+#            puts "Name:"
+#            puts "Expected: #{name}XX"
+#            puts "Received: #{ymloutput["device"]["name"]}XX"
+#            exit
+#        end
     end
     # verify modes
     if ($?.success? and hash.key?("ib-enable") and hash.key?("ab-enable") and hash.key?("euid-enable") and hash.key?("eurl-enable"))
@@ -857,6 +857,7 @@ def configure(hash, port, printer)
             print(".")
         else
             puts "FAILED!"
+            puts "Modes:"
             puts "Expected: #{modes}"
             puts "Received: #{ymloutput["ops"]["bctype"]}"
             exit
@@ -868,6 +869,7 @@ def configure(hash, port, printer)
             print(".")
         else
             puts "FAILED!"
+            puts "iBeacon Frame:"
             puts "Expected: #{ibeacon_frame}"
             puts "Received: #{ymloutput["frame0"]["frame"].delete(":").upcase}"
             exit
@@ -879,6 +881,7 @@ def configure(hash, port, printer)
             print(".")
         else
             puts "FAILED!"
+            puts "AltBeacon Frame:"
             puts "Expected: #{altbeacon_frame}"
             puts "Received: #{ymloutput["frame1"]["frame"].delete(":").upcase}"
             exit
@@ -890,6 +893,7 @@ def configure(hash, port, printer)
             print(".")
         else
             puts "FAILED!"
+            puts "Eddystone UID Frame:"
             puts "Expected: #{euid_frame}"
             puts "Received: #{ymloutput["frame2"]["frame"].delete(":").upcase}"
             exit
@@ -901,6 +905,7 @@ def configure(hash, port, printer)
             print(".")
         else
             puts "FAILED!"
+            puts "Eddystone URL Frame:"
             puts "Expected: #{eurl_frame}"
             puts "Received: #{ymloutput["frame3"]["frame"].delete(":").upcase}"
             exit
@@ -912,6 +917,7 @@ def configure(hash, port, printer)
             print(".")
         else
             puts "FAILED!"
+            puts "Rate:"
             puts "Expected: #{rate}"
             puts "Received: #{ymloutput["ops"]["advrate"]}"
             exit
@@ -923,6 +929,7 @@ def configure(hash, port, printer)
             print(".")
         else
             puts "FAILED!"
+            puts "Tx Power:"
             puts "Expected: #{txpower}"
             puts "Received: #{ymloutput["ops"]["txpwr"]}"
             exit
@@ -937,6 +944,7 @@ def configure(hash, port, printer)
             print(".")
         else
             puts "FAILED!"
+            puts "PIN:"
             puts "Expected: #{pin}"
             puts "Received: Error testing a name write withthis PIN"
             exit
@@ -954,16 +962,17 @@ def configure(hash, port, printer)
     # label
     # verify name
     if (hash.key?("label1") or hash.key?("label2") or hash.key?("label3") or hash.key?("label4") or hash.key?("label5") or hash.key?("label6"))
+        
         label = "#{label1}\n#{label2}\n#{label3}\n#{label4}\n#{label5}\n#{label6}"
-        padding = "                                        "
-        display_label = "--------------------------------------------\n" +
-                    "| " + label1 + padding[0,padding.length - label1.length] + " |\n" +
-                    "| " + label2 + padding[0,padding.length - label2.length] + " |\n" +
-                    "| " + label3 + padding[0,padding.length - label3.length] + " |\n" +
-                    "| " + label4 + padding[0,padding.length - label4.length] + " |\n" +
-                    "| " + label5 + padding[0,padding.length - label5.length] + " |\n" +
-                    "| " + label6 + padding[0,padding.length - label6.length] + " |\n" +
-                        "--------------------------------------------\n"
+        padding = "                                            "
+        display_label = " -----------------------------------------------\n" +
+        "| " + label1.to_s + padding[0,padding.length - label1.to_s.length] + " |\n" +
+        "| " + label2.to_s + padding[0,padding.length - label2.to_s.length] + " |\n" +
+        "| " + label3.to_s + padding[0,padding.length - label3.to_s.length] + " |\n" +
+        "| " + label4.to_s + padding[0,padding.length - label4.to_s.length] + " |\n" +
+        "| " + label5.to_s + padding[0,padding.length - label5.to_s.length] + " |\n" +
+        "| " + label6.to_s + padding[0,padding.length - label6.to_s.length] + " |\n" +
+                        " -----------------------------------------------\n"
         puts "Printing label..."
         puts display_label
         print_label(label, printer)
@@ -977,7 +986,7 @@ end
 
 
 def print_label(label, printer)
-    `lpr -P #{printer} -o landscape -o PageSize=Custom.1x3.5in -o cpi=12 -o lpi=7 -# 1 <<< "#{label}"`
+    `lpr -P #{printer} -o landscape -o PageSize=Custom.1x3.5in -o cpi=14 -o lpi=7 -# 1 <<< "#{label}"`
 end
 
 
@@ -1009,7 +1018,7 @@ if options.csvfile
     
         hash = configfile.hashed[i]
         validate(hash, resumeNumber)
-        notifyConfigDetails(firmware_file_name, hash, options.csvfile, resumeNumber.to_s, printer)
+        notifyConfigDetails(firmware_file_name, hash, options.csvfile, resumeNumber.to_s, configfile.hashed.length, printer)
     
         loop do
 #          system("clear")

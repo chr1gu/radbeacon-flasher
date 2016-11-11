@@ -964,15 +964,15 @@ def configure(hash, port, printer)
     if (hash.key?("label1") or hash.key?("label2") or hash.key?("label3") or hash.key?("label4") or hash.key?("label5") or hash.key?("label6"))
         
         label = "#{label1}\n#{label2}\n#{label3}\n#{label4}\n#{label5}\n#{label6}"
-        padding = "                                            "
-        display_label = " -----------------------------------------------\n" +
+        padding = "                                                     "
+        display_label = " -------------------------------------------------------\n" +
         "| " + label1.to_s + padding[0,padding.length - label1.to_s.length] + " |\n" +
         "| " + label2.to_s + padding[0,padding.length - label2.to_s.length] + " |\n" +
         "| " + label3.to_s + padding[0,padding.length - label3.to_s.length] + " |\n" +
         "| " + label4.to_s + padding[0,padding.length - label4.to_s.length] + " |\n" +
         "| " + label5.to_s + padding[0,padding.length - label5.to_s.length] + " |\n" +
         "| " + label6.to_s + padding[0,padding.length - label6.to_s.length] + " |\n" +
-                        " -----------------------------------------------\n"
+                        " -------------------------------------------------------\n"
         puts "Printing label..."
         puts display_label
         print_label(label, printer)
@@ -986,7 +986,7 @@ end
 
 
 def print_label(label, printer)
-    `lpr -P #{printer} -o landscape -o PageSize=Custom.1x3.5in -o cpi=14 -o lpi=7 -# 1 <<< "#{label}"`
+    `lpr -P #{printer} -o landscape -o PageSize=Custom.1x3.5in -o cpi=17.35 -o lpi=7 -# 1 <<< "#{label}"`
 end
 
 

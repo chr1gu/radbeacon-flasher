@@ -952,9 +952,9 @@ def configure(hash, port, printer)
     end
     
     if ($?.success?)
-        puts "............................................SUCCESS!"
+        puts ".............................................SUCCESS!"
     else
-        puts "............................................FAILED!"
+        puts ".............................................FAILED!"
         puts cmdoutput
         exit
     end
@@ -963,7 +963,9 @@ def configure(hash, port, printer)
     # verify name
     if (hash.key?("label1") or hash.key?("label2") or hash.key?("label3") or hash.key?("label4") or hash.key?("label5") or hash.key?("label6"))
         
-        label = "#{label1}\n#{label2}\n#{label3}\n#{label4}\n#{label5}\n#{label6}"
+        label7 = "Model: " + "RBUSB-001" + "  SN: " + ymloutput["device"]["mac_addr"].delete(":").upcase;
+        
+        label = "#{label1}\n#{label2}\n#{label3}\n#{label4}\n#{label5}\n#{label6}\n#{label7}"
         padding = "                                                     "
         display_label = " -------------------------------------------------------\n" +
         "| " + label1.to_s + padding[0,padding.length - label1.to_s.length] + " |\n" +
@@ -972,6 +974,7 @@ def configure(hash, port, printer)
         "| " + label4.to_s + padding[0,padding.length - label4.to_s.length] + " |\n" +
         "| " + label5.to_s + padding[0,padding.length - label5.to_s.length] + " |\n" +
         "| " + label6.to_s + padding[0,padding.length - label6.to_s.length] + " |\n" +
+        "| " + label7.to_s + padding[0,padding.length - label7.to_s.length] + " |\n" +
                         " -------------------------------------------------------\n"
         puts "Printing label..."
         puts display_label
@@ -986,7 +989,7 @@ end
 
 
 def print_label(label, printer)
-    `lpr -P #{printer} -o landscape -o PageSize=Custom.1x3.5in -o cpi=17.35 -o lpi=7 -# 1 <<< "#{label}"`
+    `lpr -P #{printer} -o landscape -o PageSize=Custom.1x3.5in -o cpi=17.35 -o lpi=8 -# 1 <<< "#{label}"`
 end
 
 

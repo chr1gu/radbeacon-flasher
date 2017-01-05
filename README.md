@@ -13,9 +13,9 @@ For full usage run with `--help` option:
 
 # PREREQUISITES
 
-This script requires both rbcomser and dfu-util.
+This script requires both serhex and dfu-util.
 
-rbcomser can be installed from source: [ble112-usb-comm](https://github.com/RadiusNetworks/ble112-usb-comm).
+serhex can be installed from source: [serhex](https://github.com/RadiusNetworks/serhex).
 
 
 dfu-util can be found in most package managers:
